@@ -1,0 +1,27 @@
+package online.coffeeispower.jayland.core.platform.linux
+
+import online.coffeeispower.jayland.core.GPUScanoutBuffer
+
+/**
+ * A [GPUScanoutBuffer] whose backing memory can be imported into the DRM/KMS
+ * stack, exposing the format, tiling modifier and DMA-BUF fd the kernel needs
+ * to build a scanout framebuffer. Mirrors [online.coffeeispower.jayland.core.platform.linux.DrmGPU]
+ * by staying Linux-specific while the platform-agnostic [GPUScanoutBuffer]
+ * stays clean.
+ */
+interface DrmScanoutBuffer : GPUScanoutBuffer {
+    /** The `DRM_FORMAT_*` fourcc of the buffer (e.g. `DRM_FORMAT_XRGB8888`). */
+    val drmFormat: Int
+
+    /** The `DRM_FORMAT_MOD_*` tiling modifier (e.g. `DRM_FORMAT_MOD_LINEAR`). */
+    val drmModifier: Long
+
+    /** Row pitch in bytes of the first plane, as the kernel needs it in `drm_mode_fb_cmd2`. */
+    val stride: Int
+
+    /**
+     * Exports the buffer's memory as a DMA-BUF file descriptor for import into
+     * KMS (via `drmPrimeFDToHandle`). The caller owns and must close the fd.
+     */
+    fun exportDmaBufFd(): Int
+}
