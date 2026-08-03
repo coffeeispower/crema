@@ -2,7 +2,11 @@ package online.coffeeispower.jayland.blitTargets.drm
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.selects.select
 import online.coffeeispower.jayland.core.Connector
 import online.coffeeispower.jayland.core.EventLoop
 import online.coffeeispower.jayland.core.EventLoopEvent
@@ -23,6 +27,11 @@ import java.util.concurrent.ConcurrentHashMap
  * the compositor's own work. One loop serves all [devices] (one per GPU card)
  * from a single [PollDispatcher]; the committer `user_data` segments are unique
  * across the shared arena, so the same map routes flips regardless of card.
+ *
+ * [close] is the only way to stop [run]: it wakes the reactor through the
+ * [shutdown] channel (the poll loop uses `select`, so no card fd needs to fire)
+ * and the loop exits between events. It is safe to call from any thread and may
+ * be called before [run].
  */
 class DRMEventLoop(
     private val devices: List<DRMDevice>,
@@ -32,16 +41,21 @@ class DRMEventLoop(
     private val logger = KotlinLogging.logger {}
 
     private val committers = ConcurrentHashMap<Long, DRMCommitter>()
-    private val userDataArena = Arena.ofShared()
+    private val shutdown = Channel<Unit>(Channel.CONFLATED)
 
     @Volatile
     private var closed = false
 
     private var eventContext: MemorySegment = MemorySegment.NULL
 
-    /** Allocates a stable `user_data` segment for [committer] and routes its flips to it. */
+    /**
+     * Allocates a stable `user_data` segment for [committer] and routes its
+     * flips to it. Segments come from [Arena.global]: they are never freed
+     * individually (8 bytes per committer), so a committer can unregister after
+     * [close] without touching a closed arena.
+     */
     internal fun register(committer: DRMCommitter): MemorySegment {
-        val segment = userDataArena.allocate(8L)
+        val segment = Arena.global().allocate(8L)
         committers[segment.address()] = committer
         return segment
     }
@@ -61,22 +75,35 @@ class DRMEventLoop(
                 PollDispatcher("drm-events").use { dispatcher ->
                     val pollers = devices.map { device -> device.fd to dispatcher.watch(device.fd) }
                     while (!closed) {
-                        for ((fd, poller) in pollers) {
-                            poller.awaitReadable()
-                            drainEvents(fd)
+                        select {
+                            pollers.forEach { (fd, poller) -> poller.onReadable { drainEvents(fd) } }
+                            shutdown.onReceive { closed = true }
                         }
                     }
                 }
             } finally {
                 arena.close()
             }
+            // The select has exited, but `runBlocking` still waits for its
+            // children: the per-connector render loops are suspended awaiting
+            // page flips that can no longer arrive now that the reactor is
+            // going away. Cancel and join them on this thread so this
+            // runBlocking can return; otherwise the session's
+            // `finally { shutdown() }` never runs and the process hangs with
+            // the display captured.
+            coroutineContext[Job]?.children?.forEach { it.cancelAndJoin() }
         }
     }
 
     private fun drainEvents(fd: Int) {
         val ret = Xf86Drm.drmHandleEvent(fd, eventContext)
-        if (ret != 0) {
-            logger.warn { "drmHandleEvent returned $ret on card fd $fd" }
+        when (ret) {
+            0 -> {}
+            // -1 is the benign EAGAIN race: a level-triggered epoll wakeup for
+            // an event that was already drained (drmHandleEvent returns -1 on a
+            // read of ≤7 bytes). Not a flip failure.
+            -1 -> logger.trace { "drmHandleEvent EAGAIN race on card fd $fd" }
+            else -> logger.warn { "drmHandleEvent returned $ret on card fd $fd" }
         }
     }
 
@@ -95,7 +122,8 @@ class DRMEventLoop(
     }
 
     override fun close() {
+        if (closed) return
         closed = true
-        userDataArena.close()
+        shutdown.trySend(Unit)
     }
 }

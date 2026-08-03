@@ -11,8 +11,11 @@ object DrmFormats {
     const val XRGB8888 = 0x34325258
     const val XRGB2101010 = 0x30335258
 
-    const val MOD_LINEAR = 1L
-    const val MOD_INVALID = 0L
+    // `fourcc_mod_code(NONE, n) = n`, so `DRM_FORMAT_MOD_LINEAR` is 0 and
+    // `DRM_FORMAT_MOD_INVALID` (fourcc_mod_code(NONE, DRM_FORMAT_RESERVED)) is
+    // 0x00FFFFFFFFFFFFFF — all 56 low bits set.
+    const val MOD_LINEAR = 0L
+    const val MOD_INVALID = 0x00FFFFFFFFFFFFFFL
 }
 
 /** The DRM fourcc a [ColorMode] scanout buffer is presented as. */

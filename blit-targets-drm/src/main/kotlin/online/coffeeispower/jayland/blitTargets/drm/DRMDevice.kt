@@ -8,9 +8,11 @@ import java.nio.file.Path
  * The open DRM primary card: the fd the KMS side does all its ioctls through,
  * plus DRM master ownership and the client caps atomic commits require.
  *
- * Opening the card and grabbing master needs privileges (root or
- * `CAP_SYS_ADMIN`); callers that cannot get them should treat [open] as
- * unsupported and fall back to another presentation backend.
+ * Opening the card and grabbing master needs DRM master privileges, which are
+ * granted to the active session on a TTY (no root needed: run from an empty
+ * virtual console, not from inside another compositor's desktop session).
+ * Callers that cannot get them should treat [open] as unsupported and fall
+ * back to another presentation backend.
  */
 class DRMDevice private constructor(val fd: Int) : AutoCloseable {
 
@@ -35,7 +37,7 @@ class DRMDevice private constructor(val fd: Int) : AutoCloseable {
             val fd = Posix.open(path.toString(), O_RDWR)
             check(fd >= 0) { "Cannot open DRM device $path (fd=$fd)" }
 
-            check(Xf86Drm.drmSetMaster(fd) == 0) { "drmSetMaster($path) failed (are we root?)" }
+            check(Xf86Drm.drmSetMaster(fd) == 0) { "drmSetMaster($path) failed (run from an empty TTY so the session owns the connectors)" }
             return DRMDevice(fd)
         }
     }

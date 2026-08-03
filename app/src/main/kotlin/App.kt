@@ -9,9 +9,9 @@ import online.coffeeispower.jayland.blitTargets.wayland.*;
 import online.coffeeispower.jayland.utils.errors.*
 import online.coffeeispower.jayland.utils.logging.LogArchiver
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 fun main() {
+
     // Minecraft-style session logs: gzip the previous session's log into a
     // numbered archive and start a fresh file at the normal path, so
     // jayland.log only ever holds the current session. Must run before any
@@ -24,10 +24,10 @@ fun main() {
     // CrashReport.logFile; log4j2 resolves it via JaylandLogFileLookup.)
     Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
         val panic = Panic(throwable);
-        val out = TeePrintStream(System.err, CrashReport.logFile);
-        panic.printStackTrace(out);
-        CrashReport.print(out, panic);
-        out.flush();
+        val err = TeePrintStream(System.err, CrashReport.logFile);
+        panic.printStackTrace(err);
+        CrashReport.print(err, panic);
+        err.flush();
     };
 
     KotlinLoggingConfiguration.logStartupMessage = false;
@@ -38,9 +38,8 @@ fun main() {
             rendererBackend = "vulkan",
             renderer = { VulkanRenderer() },
             platform = { deviceManager ->
-                // DRMBlitTarget opens every GPU's card and presents on all their
-                // connectors; throws UnsupportedPlatformException when none qualify.
-                PlatformBackend(DRMBlitTarget(deviceManager.gpus), object : InputManager {}, stubEventLoop())
+                val blit = DRMBlitTarget(deviceManager.gpus)
+                PlatformBackend(blit, object : InputManager {}, blit.eventLoop)
             },
         ),
         BackendConfig(
@@ -56,8 +55,8 @@ fun main() {
             platform = { _ -> PlatformBackend(Win32BlitTarget(), object : InputManager {}, stubEventLoop()) },
         ),
     );
-    println()
-    println(
+
+    TeePrintStream(System.out, CrashReport.logFile).println(
         """
                                Welcome to
          ___  _______  __   __  ___      _______  __    _  ______  
@@ -80,31 +79,27 @@ fun main() {
     };
     val renderer = backend.renderer;
 
-    // block until shutdown; runs on the poll-dispatcher thread (epoll/kqueue/WAIT)
-    val started = mutableSetOf<Connector>();
-    backend.eventLoop.run { event ->
-        when (event) {
-            is EventLoopEvent.StartMonitors -> event.connectors.forEach { connector ->
-                if (started.add(connector)) {
-                    launch {
-                        val output = backend.enable(connector);
-                        while (!output.detached) {
-                            val buffer = output.swapchain.acquireBuffer();   // N-deep pool, suspends when full
-                            val submission = renderer.beginFrame(buffer) {   // record + dispatch the frame's commands
-                                clear(Color.RED);                            // DSL: queue a fill of `buffer`
-                            };
-                            val result = output.committer.commit(Frame(buffer, submission)); // suspends until the page flip completes
-                            submission.close();                              // KMS is done with the in-fence
-                            // result.presentedAt / result.presented / result.frameSeq
-                        }
-                        started.remove(connector);
-                        output.close();                                 // release CRTC/encoder/swapchain
-                    }
-                }
-            }
-            is EventLoopEvent.MonitorConnected -> Unit
-            is EventLoopEvent.MonitorDisconnected -> Unit
-        }
+    // Block until shutdown: the session runs the platform event loop (on the
+    // reactor thread), owns the per-output render loops, and tears everything
+    // down on Ctrl+C / panic.
+    CompositorSession(backend) { output -> renderFrame(renderer, output) }.run()
+}
+
+/**
+ * Produces one frame for [output]: acquire a buffer from its swapchain, record
+ * and dispatch the frame's commands into it, then commit it to the screen.
+ * [Committer.commit] suspends until the page flip completes; [Submission.close] is always
+ * run (even on cancellation) so the in-fence is released exactly once.
+ */
+private suspend fun CoroutineScope.renderFrame(renderer: Renderer, output: Output) {
+    val buffer = output.swapchain.acquireBuffer();
+    val submission = renderer.beginFrame(buffer) {
+        clear(Color.RED);
+    };
+    try {
+        output.committer.commit(Frame(buffer, submission));
+    } finally {
+        submission.close();
     }
 }
 

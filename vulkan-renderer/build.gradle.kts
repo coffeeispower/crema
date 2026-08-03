@@ -15,6 +15,8 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":lwjgl-utils"))
 
+    testImplementation(project(":drm-sys"))
+
     testRuntimeOnly(libs.log4jApi)
     testRuntimeOnly(libs.log4jCore)
     testRuntimeOnly(libs.log4jSlf4j2Impl)

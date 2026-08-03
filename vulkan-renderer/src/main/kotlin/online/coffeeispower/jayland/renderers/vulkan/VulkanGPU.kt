@@ -119,40 +119,94 @@ class VulkanGPU(
     }
 
     /**
-     * Chooses the DRM format modifier the scanout images are created with.
-     * Prefers [DrmFormats.MOD_LINEAR] (always displayable), falling back to
-     * [DrmFormats.MOD_INVALID] when the device cannot create modifier images,
-     * in which case buffers are allocated with implicit optimal tiling.
+     * Chooses how scanout images are created and what modifier to report to KMS.
+     *
+     * When the output constrains the layout ([allowedModifiers]), a plain
+     * `VK_IMAGE_TILING_LINEAR` image is preferred whenever LINEAR is allowed:
+     * its pitch is knowable exactly (vkGetImageSubresourceLayout), it is
+     * single-plane (no CCS aux surface to describe in the framebuffer) and every
+     * plane listing LINEAR in its `IN_FORMATS` accepts it. Otherwise the first
+     * tiled modifier the device can produce is used with a
+     * `VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT` image (created with an explicit
+     * layout, so the exported DMA-BUF carries the modifier and the KMS pitch is
+     * deterministic). If only [DrmFormats.MOD_LINEAR] is acceptable it may be
+     * produced through the extension instead; any other unsatisfiable constraint
+     * is an error, because silently creating an image the output cannot scan out
+     * is worse than failing enable.
+     *
+     * With no constraint it prefers a modifier image carrying
+     * [DrmFormats.MOD_LINEAR], then a plain linear image, and last resort is
+     * implicit optimal tiling (whose exported buffer does not scan out).
      */
-    fun pickScanoutModifier(format: Int, usage: Int): Long {
-        if (EXTImageDrmFormatModifier.VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME !in deviceExtensions) {
-            return DrmFormats.MOD_INVALID
-        }
-        return memStack {
-            val modifierInfo = VkPhysicalDeviceImageDrmFormatModifierInfoEXT.calloc(this)
-                .`sType$Default`()
-                .drmFormatModifier(DrmFormats.MOD_LINEAR)
-                .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
-                .queueFamilyIndexCount(0)
-                .pQueueFamilyIndices(null)
-            val formatInfo = VkPhysicalDeviceImageFormatInfo2.calloc(this)
-                .`sType$Default`()
-                .format(format)
-                .type(VK_IMAGE_TYPE_2D)
-                .tiling(EXTImageDrmFormatModifier.VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT)
-                .usage(usage)
-                .pNext(modifierInfo.address())
-            val supported = VkImageFormatProperties2.calloc(this).`sType$Default`()
-            if (vkGetPhysicalDeviceImageFormatProperties2(physicalDevice, formatInfo, supported) ==
-                VK10.VK_ERROR_FORMAT_NOT_SUPPORTED
-            ) {
-                logger.debug { "DRM_FORMAT_MOD_LINEAR not supported for format $format, falling back to implicit tiling" }
-                DrmFormats.MOD_INVALID
-            } else {
-                logger.debug { "DRM_FORMAT_MOD_LINEAR supported for format $format" }
-                DrmFormats.MOD_LINEAR
+    fun pickScanoutTiling(format: Int, usage: Int, allowedModifiers: List<Long>? = null): ScanoutTiling {
+        val required = allowedModifiers.orEmpty()
+        if (required.isNotEmpty()) {
+            if (DrmFormats.MOD_LINEAR in required && isTilingSupported(format, usage, VK_IMAGE_TILING_LINEAR)) {
+                logger.debug { "Output-required LINEAR satisfied with plain linear tiling for format $format" }
+                return ScanoutTiling(VK_IMAGE_TILING_LINEAR, DrmFormats.MOD_LINEAR)
             }
+            if (EXTImageDrmFormatModifier.VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME in deviceExtensions) {
+                for (modifier in required) {
+                    if (modifier == DrmFormats.MOD_LINEAR) continue
+                    if (isTilingSupported(format, usage, modifier)) {
+                        logger.debug { "Output-required DRM modifier $modifier supported for format $format" }
+                        return ScanoutTiling(
+                            EXTImageDrmFormatModifier.VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
+                            modifier,
+                        )
+                    }
+                }
+                if (DrmFormats.MOD_LINEAR in required && isTilingSupported(format, usage, DrmFormats.MOD_LINEAR)) {
+                    logger.debug { "Output-required LINEAR produced via DRM modifier extension for format $format" }
+                    return ScanoutTiling(
+                        EXTImageDrmFormatModifier.VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
+                        DrmFormats.MOD_LINEAR,
+                    )
+                }
+            }
+            error("None of the output-required scanout modifiers $required can be produced for format $format")
         }
+        if (EXTImageDrmFormatModifier.VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME in deviceExtensions &&
+            isTilingSupported(format, usage, DrmFormats.MOD_LINEAR)
+        ) {
+            logger.debug { "DRM_FORMAT_MOD_LINEAR supported for format $format" }
+            return ScanoutTiling(
+                EXTImageDrmFormatModifier.VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
+                DrmFormats.MOD_LINEAR,
+            )
+        }
+        if (isTilingSupported(format, usage, VK_IMAGE_TILING_LINEAR)) {
+            logger.debug { "Plain linear tiling supported for format $format" }
+            return ScanoutTiling(VK_IMAGE_TILING_LINEAR, DrmFormats.MOD_LINEAR)
+        }
+        logger.warn { "Linear tiling not supported for format $format, falling back to implicit optimal tiling" }
+        return ScanoutTiling(VK_IMAGE_TILING_OPTIMAL, DrmFormats.MOD_INVALID)
+    }
+
+    private fun isTilingSupported(format: Int, usage: Int, modifier: Long): Boolean = memStack {
+        val modifierInfo = VkPhysicalDeviceImageDrmFormatModifierInfoEXT.calloc(this)
+            .`sType$Default`()
+            .drmFormatModifier(modifier)
+            .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
+            .queueFamilyIndexCount(0)
+            .pQueueFamilyIndices(null)
+        isTilingSupported(format, usage, EXTImageDrmFormatModifier.VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT, modifierInfo.address())
+    }
+
+    private fun isTilingSupported(format: Int, usage: Int, tiling: Int): Boolean = memStack {
+        isTilingSupported(format, usage, tiling, 0L)
+    }
+
+    private fun isTilingSupported(format: Int, usage: Int, tiling: Int, pNext: Long): Boolean = memStack {
+        val formatInfo = VkPhysicalDeviceImageFormatInfo2.calloc(this)
+            .`sType$Default`()
+            .format(format)
+            .type(VK_IMAGE_TYPE_2D)
+            .tiling(tiling)
+            .usage(usage)
+            .pNext(pNext)
+        val properties = VkImageFormatProperties2.calloc(this).`sType$Default`()
+        vkGetPhysicalDeviceImageFormatProperties2(physicalDevice, formatInfo, properties) == VK_SUCCESS
     }
 
     override fun close() {

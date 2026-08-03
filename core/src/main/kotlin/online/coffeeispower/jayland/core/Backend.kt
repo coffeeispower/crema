@@ -33,11 +33,17 @@ class Backend private constructor(
             logger.info { "Enabled connector ${connector.monitor.name} at ${mode.width}x${mode.height}@${mode.refreshRateHz}Hz" }
         }
 
+    private var closed = false
+
     override fun close() {
+        if (closed) return
+        closed = true
         logger.info { "Shutting down backend" }
+        // Shut the reactor down first so no page flips can arrive while the
+        // committers and outputs below are torn down.
         eventLoop.close()
-        inputManager.close()
         blitTarget.close()
+        inputManager.close()
         renderer.close()
         logger.info { "Backend shut down" }
     }

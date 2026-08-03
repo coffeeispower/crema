@@ -9,4 +9,12 @@ package online.coffeeispower.jayland.core
  */
 interface BlitTarget : AutoCloseable {
     val connectorManager: ConnectorManager
+
+    /**
+     * The event loop presentation events feed into (page flips, frame
+     * callbacks, window messages). The compositor runs this loop and reacts to
+     * [EventLoopEvent]s; the blit target implements it so it can route its own
+     * completion events (e.g. DRM page flips) without exposing platform details.
+     */
+    val eventLoop: EventLoop
 }

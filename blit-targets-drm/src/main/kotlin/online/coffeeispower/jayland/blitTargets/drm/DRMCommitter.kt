@@ -1,6 +1,7 @@
 package online.coffeeispower.jayland.blitTargets.drm
 
 import kotlinx.coroutines.CompletableDeferred
+import io.github.oshai.kotlinlogging.KotlinLogging
 import online.coffeeispower.jayland.core.Committer
 import online.coffeeispower.jayland.core.Frame
 import online.coffeeispower.jayland.core.FrameResult
@@ -29,6 +30,8 @@ class DRMCommitter internal constructor(
     private val eventLoop: DRMEventLoop,
 ) : Committer {
 
+    private val logger = KotlinLogging.logger {}
+
     private val fd: Int get() = output.device.fd
     private val props: DrmProperties get() = output.props
     private val crtcId: Int get() = output.crtcId
@@ -44,6 +47,7 @@ class DRMCommitter internal constructor(
     private var currentFbId = 0
     private var lastDisplayed: GPUScanoutBuffer? = null
     private var inFlightBuffer: GPUScanoutBuffer? = null
+    private var closed = false
 
     override suspend fun commit(frame: Frame): FrameResult {
         require(frame.buffer is DrmScanoutBuffer) { "DRM can only present DrmScanoutBuffer frames" }
@@ -117,17 +121,47 @@ class DRMCommitter internal constructor(
             handles.set(ValueLayout.JAVA_INT, 0L, handle)
             pitches.set(ValueLayout.JAVA_INT, 0L, buffer.stride)
             offsets.set(ValueLayout.JAVA_INT, 0L, 0)
+            // The kernel requires all four modifier entries to carry the same
+            // value when DRM_MODE_FB_MODIFIERS is set (a zero entry for a plane
+            // that should not be there is a mismatch, not "unused"), so mirror
+            // the modifier across every plane slot like the reference's
+            // add_planar_framebuffer does.
             modifiers.set(ValueLayout.JAVA_LONG, 0L, buffer.drmModifier)
+            modifiers.set(ValueLayout.JAVA_LONG, 8L, buffer.drmModifier)
+            modifiers.set(ValueLayout.JAVA_LONG, 16L, buffer.drmModifier)
+            modifiers.set(ValueLayout.JAVA_LONG, 24L, buffer.drmModifier)
+            // The kernel only honors modifier[] when DRM_MODE_FB_MODIFIERS is
+            // set; passing a non-INVALID modifier without the flag fails with
+            // EINVAL, so the flag must follow the modifier, not how the image
+            // was created (mirrors the reference implementation's use of
+            // FbCmd2Flags::MODIFIERS whenever the BO has a real modifier).
             val flags = if (buffer.drmModifier != DrmFormats.MOD_INVALID) {
                 Xf86Drm.DRM_MODE_FB_MODIFIERS()
             } else {
                 0
             }
+            logger.trace {
+                "addFB2 ${buffer.width}x${buffer.height} fourcc=0x${buffer.drmFormat.toString(16)} " +
+                    "pitch=${buffer.stride} modifier=${buffer.drmModifier} " +
+                    "usesExplicit=${buffer.usesExplicitModifier} flags=$flags handle=$handle"
+            }
             val ret = Xf86Drm.drmModeAddFB2WithModifiers(
                 fd, buffer.width, buffer.height, buffer.drmFormat,
                 handles, pitches, offsets, modifiers, outId, flags,
             )
-            check(ret == 0) { "drmModeAddFB2WithModifiers failed with $ret" }
+            if (ret == 0) {
+                return@use outId.get(ValueLayout.JAVA_INT, 0)
+            }
+            // Some drivers reject linear buffers through the ADDFB2 ioctl too;
+            // fall back to the legacy single-plane call (like the reference
+            // implementation's add_framebuffer(bo, 24, 32)).
+            val legacyRet = Xf86Drm.drmModeAddFB(
+                fd, buffer.width, buffer.height, 24.toByte(), 32.toByte(),
+                buffer.stride, handle, outId,
+            )
+            check(legacyRet == 0) {
+                "drmModeAddFB2WithModifiers failed with $ret, drmModeAddFB fallback failed with $legacyRet"
+            }
             outId.get(ValueLayout.JAVA_INT, 0)
         }
     }
@@ -160,7 +194,10 @@ class DRMCommitter internal constructor(
 
     private fun addProperty(request: MemorySegment, objectId: Int, propertyId: Int, value: Long) {
         val ret = Xf86Drm.drmModeAtomicAddProperty(request, objectId, propertyId, value)
-        check(ret == 0) { "drmModeAtomicAddProperty($objectId, $propertyId) failed with $ret" }
+        // Returns the request's property count on success (libdrm <2.4.134
+        // returns 0; newer returns the cursor), or a negative errno on failure.
+        // Only the commit itself reports real errors (EINVAL, EBUSY, ...).
+        check(ret >= 0) { "drmModeAtomicAddProperty($objectId, $propertyId) failed with $ret" }
     }
 
     private inline fun outInt(block: (MemorySegment) -> Unit): Int =
@@ -171,6 +208,8 @@ class DRMCommitter internal constructor(
         }
 
     override fun close() {
+        if (closed) return
+        closed = true
         eventLoop.unregister(this, userData)
         if (currentFbId != 0) {
             Xf86Drm.drmModeRmFB(fd, currentFbId)

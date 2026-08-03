@@ -16,6 +16,16 @@ interface DrmScanoutBuffer : GPUScanoutBuffer {
     /** The `DRM_FORMAT_MOD_*` tiling modifier (e.g. `DRM_FORMAT_MOD_LINEAR`). */
     val drmModifier: Long
 
+    /**
+     * Whether the buffer's DMA-BUF carries its [drmModifier] in its `mod_info`,
+     * i.e. the image was created through the DRM format modifier extension.
+     * When false the image was created with plain (implicit) linear tiling, so
+     * KMS may need the legacy framebuffer path to present it. The committer
+     * passes the modifier explicitly whenever [drmModifier] is not
+     * `DRM_FORMAT_MOD_INVALID`.
+     */
+    val usesExplicitModifier: Boolean
+
     /** Row pitch in bytes of the first plane, as the kernel needs it in `drm_mode_fb_cmd2`. */
     val stride: Int
 

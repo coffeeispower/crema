@@ -44,8 +44,22 @@ release notes.
 ### Build
 
 ```sh
-./gradlew run
+./gradlew build
 ```
+
+To run it interactively, use `scripts/run` (builds and launches the app
+directly):
+
+```sh
+scripts/run
+```
+
+Use this instead of `./gradlew run`: Gradle forks the app JVM into its own
+process group, so Ctrl+C (SIGINT to the terminal's foreground group) never
+reaches the compositor and its shutdown hook can't run — the screen stays
+captured. Launching the start script directly keeps the JVM in the
+foreground group, so Ctrl+C tears the display down cleanly and returns you
+to the console.
 
 ### Presentation modes
 
@@ -84,7 +98,7 @@ The whole point is that this thing is yours.
 
 ## Development
 
-- `./gradlew run` — build and run
+- `scripts/run` — build and run (recommended for interactive use, see above)
 - `./gradlew build` — build everything
 - `./gradlew check` — all checks and tests
 - `./gradlew clean` — clean build outputs

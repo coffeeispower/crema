@@ -26,11 +26,15 @@ class DRMOutput(
     private val eventLoop: DRMEventLoop,
 ) : Output {
 
-    override val detached = false
+    @Volatile
+    override var detached = false
+        private set
 
     override val committer: Committer = DRMCommitter(this, eventLoop)
 
     override fun close() {
+        if (detached) return
+        detached = true
         committer.close()
         disable()
         swapchain.close()

@@ -14,13 +14,19 @@ import online.coffeeispower.jayland.drm.sys._drmModeConnector
 import online.coffeeispower.jayland.drm.sys._drmModeModeInfo
 import online.coffeeispower.jayland.drm.sys._drmModePlane
 import online.coffeeispower.jayland.drm.sys._drmModePlaneRes
+import online.coffeeispower.jayland.drm.sys._drmModePropertyBlob
+import online.coffeeispower.jayland.drm.sys.drm_format_modifier
+import online.coffeeispower.jayland.drm.sys.drm_format_modifier_blob
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 
 /**
  * A connected DRM connector (a physical port). [enable] wires up the swapchain
- * and the plane/CRTC pair it scans out through, returning a [DRMOutput].
+ * and the plane/CRTC pair it scans out through, returning a [DRMOutput]. The
+ * swapchain's buffers are created with the modifiers the plane advertises in
+ * its `IN_FORMATS` property, so the output drives the buffer layout instead of
+ * guessing what KMS accepts.
  */
 class DRMConnector(
     override val enabled: Boolean,
@@ -38,8 +44,12 @@ class DRMConnector(
 
     override fun enable(mode: Mode, vram: VRam): Output {
         val colorMode = ColorMode.RGBA8
-        val swapchain = Swapchain(mode.width, mode.height, colorMode, depth = 2, vram)
         val planeId = findPrimaryPlane(colorMode.drmFourcc)
+        val modifiers = planeScanoutModifiers(device.fd, planeId, colorMode.drmFourcc)
+        logger.debug {
+            "Plane $planeId scanout modifiers for fourcc 0x${colorMode.drmFourcc.toString(16)}: $modifiers"
+        }
+        val swapchain = Swapchain(mode.width, mode.height, colorMode, depth = 2, vram, allowedModifiers = modifiers)
         val props = DrmProperties.resolve(device.fd, planeId, crtcId, connectorId)
         val modeBlobId = createModeBlob(mode)
         logger.info {
@@ -101,6 +111,77 @@ class DRMConnector(
             Xf86Drm.drmModeFreePlaneResources(resources)
         }
         error("No primary plane for fourcc 0x${fourcc.toString(16)} on CRTC $crtcId")
+    }
+
+    /**
+     * Reads the plane's `IN_FORMATS` property and returns the modifiers it can
+     * scan [fourcc] with, ordered so [DrmFormats.MOD_LINEAR] (the one layout the
+     * renderer is guaranteed to produce and every driver accepts) is first. When
+     * the property or its blob is unavailable, falls back to LINEAR only.
+     */
+    private fun planeScanoutModifiers(fd: Int, planeId: Int, fourcc: Int): List<Long> {
+        val blobId = DrmProperties.propertyValue(fd, planeId, Xf86Drm.DRM_MODE_OBJECT_PLANE(), "IN_FORMATS")
+            ?: return listOf(DrmFormats.MOD_LINEAR)
+        if (blobId == 0L) return listOf(DrmFormats.MOD_LINEAR)
+        val blob = Xf86Drm.drmModeGetPropertyBlob(fd, blobId.toInt())
+        if (blob.address() == 0L) return listOf(DrmFormats.MOD_LINEAR)
+        return try {
+            readFormatModifiers(blob, fourcc)
+        } finally {
+            Xf86Drm.drmModeFreePropertyBlob(blob)
+        }
+    }
+
+    /**
+     * Extracts the modifiers for [fourcc] from an `IN_FORMATS` blob (the kernel's
+     * `drm_format_modifier_blob`: a header, a `formats[]` fourcc table and a
+     * `drm_format_modifier` array whose `formats` bitmask covers the table with a
+     * 64-entry sliding window). Returns LINEAR-only when parsing fails so a
+     * hostile blob can never crash enable.
+     */
+    companion object {
+        internal fun readFormatModifiers(blob: MemorySegment, fourcc: Int): List<Long> {
+            val data = _drmModePropertyBlob.data(blob)
+            val length = _drmModePropertyBlob.length(blob)
+            val headerSize = drm_format_modifier_blob.layout().byteSize()
+            if (data.address() == 0L || length < headerSize) return listOf(DrmFormats.MOD_LINEAR)
+            return Arena.ofConfined().use { arena ->
+                val blobSegment = data.reinterpret(length.toLong(), arena, null)
+                val countFormats = drm_format_modifier_blob.count_formats(blobSegment)
+                val formatsOffset = drm_format_modifier_blob.formats_offset(blobSegment)
+                val countModifiers = drm_format_modifier_blob.count_modifiers(blobSegment)
+                val modifiersOffset = drm_format_modifier_blob.modifiers_offset(blobSegment)
+                val formatsBytes = countFormats.toLong() * 4L
+                val modifiersBytes = countModifiers.toLong() * drm_format_modifier.layout().byteSize()
+                // A malformed/truncated blob must never crash enable: bail out to the
+                // LINEAR default when the declared tables fall outside the blob.
+                if (formatsOffset.toLong() + formatsBytes > length ||
+                    modifiersOffset.toLong() + modifiersBytes > length
+                ) {
+                    return@use listOf(DrmFormats.MOD_LINEAR)
+                }
+                val formatIndex = (0 until countFormats).firstOrNull {
+                    blobSegment.get(ValueLayout.JAVA_INT, formatsOffset.toLong() + it * 4L) == fourcc
+                } ?: return@use listOf(DrmFormats.MOD_LINEAR)
+                val modifiers = mutableListOf<Long>()
+                val modifierSize = drm_format_modifier.layout().byteSize()
+                for (i in 0 until countModifiers) {
+                    val entry = blobSegment.asSlice(modifiersOffset.toLong() + i * modifierSize, modifierSize)
+                    val window = drm_format_modifier.offset(entry)
+                    val bit = formatIndex - window
+                    if (bit in 0 until 64 && (drm_format_modifier.formats(entry) shr bit) and 1L != 0L) {
+                        modifiers += drm_format_modifier.modifier(entry)
+                    }
+                }
+                if (DrmFormats.MOD_LINEAR in modifiers) {
+                    listOf(DrmFormats.MOD_LINEAR) + modifiers.filter { it != DrmFormats.MOD_LINEAR }
+                } else if (modifiers.isNotEmpty()) {
+                    modifiers
+                } else {
+                    listOf(DrmFormats.MOD_LINEAR)
+                }
+            }
+        }
     }
 
     /** Copies the requested [mode]'s `drm_mode_modeinfo` into a MODE_ID blob. */

@@ -4,6 +4,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import online.coffeeispower.jayland.core.BlitTarget
 import online.coffeeispower.jayland.core.Connector
 import online.coffeeispower.jayland.core.ConnectorManager
+import online.coffeeispower.jayland.core.EventLoop
 import online.coffeeispower.jayland.core.GPU
 import online.coffeeispower.jayland.core.platform.linux.DrmGPU
 import online.coffeeispower.jayland.utils.errors.UnsupportedPlatformException
@@ -25,10 +26,22 @@ class DRMBlitTarget(private val gpus: List<GPU>) : BlitTarget {
     private val logger = KotlinLogging.logger {}
 
     private var devices: List<DRMDevice> = emptyList()
-    private var eventLoop: DRMEventLoop? = null
+    private var drmEventLoop: DRMEventLoop? = null
+    private var closed = false
 
     private val connectorManagerDelegate = lazy { createConnectorManager() }
     override val connectorManager: ConnectorManager by connectorManagerDelegate
+
+    /**
+     * The DRM event reactor. Accessing it forces connector enumeration so the
+     * loop (which the committers register their page flips with) exists.
+     */
+    override val eventLoop: EventLoop
+        get() {
+            check(!closed) { "DRMBlitTarget is closed" }
+            connectorManager
+            return checkNotNull(drmEventLoop) { "DRM event loop is unavailable" }
+        }
 
     private fun createConnectorManager(): ConnectorManager {
         val opened = mutableListOf<Pair<DRMDevice, GPU>>()
@@ -65,7 +78,7 @@ class DRMBlitTarget(private val gpus: List<GPU>) : BlitTarget {
             // currently initializing (which would recurse forever).
             lateinit var composite: ConnectorManager
             val loop = DRMEventLoop(devices) { composite.connectors }
-            eventLoop = loop
+            drmEventLoop = loop
             val managers = opened.map { (dev, gpu) -> DRMConnectorManager(dev, gpu, loop) }
             logger.info { "DRM blit target driving ${devices.size} card(s)" }
             composite = object : ConnectorManager {
@@ -77,8 +90,8 @@ class DRMBlitTarget(private val gpus: List<GPU>) : BlitTarget {
             return composite
         } catch (t: Throwable) {
             // Never leak already-opened cards when a later one fails to open.
-            eventLoop?.close()
-            eventLoop = null
+            drmEventLoop?.close()
+            drmEventLoop = null
             opened.forEach { it.first.close() }
             devices = emptyList()
             throw t
@@ -86,11 +99,13 @@ class DRMBlitTarget(private val gpus: List<GPU>) : BlitTarget {
     }
 
     override fun close() {
+        if (closed) return
+        closed = true
         // Only close what actually came up. If connectorManager initialization
         // failed it already released everything, and re-running the lazy here
         // would reopen the cards just to fail again.
         if (connectorManagerDelegate.isInitialized()) connectorManager.close()
-        eventLoop?.close()
+        drmEventLoop?.close()
         devices.forEach { it.close() }
     }
 }

@@ -11,6 +11,11 @@ import kotlinx.coroutines.sync.Semaphore
  * Buffers are allocated eagerly from [vram] and returned to the pool with
  * [release] once their scanout has completed. The pool owns the buffers and
  * destroys them when this swapchain is [closed][close].
+ *
+ * The output drives the buffer layout: [allowedModifiers] are the layouts the
+ * output can scan out (opaque DRM format modifiers on Linux), and every buffer
+ * is created with one of them instead of the VRam guessing what the output
+ * accepts.
  */
 class Swapchain(
     val width: Int,
@@ -18,9 +23,10 @@ class Swapchain(
     val colorMode: ColorMode,
     val depth: Int = 2,
     private val vram: VRam,
+    allowedModifiers: List<Long>? = null,
 ) : AutoCloseable {
 
-    private val buffers = List(depth) { vram.allocateBufferForScanout(width, height, colorMode) }
+    private val buffers = List(depth) { vram.allocateBufferForScanout(width, height, colorMode, allowedModifiers) }
     private val free = ArrayDeque<GPUScanoutBuffer>().apply { addAll(buffers) }
     private val freeSlots = Semaphore(depth)
     private val lock = Any()

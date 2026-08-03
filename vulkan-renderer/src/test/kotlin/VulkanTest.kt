@@ -102,9 +102,10 @@ class VulkanTest {
                 val dmaBufFd = buffer.exportDmaBufFd()
                 val bytes = Posix.mmapRead(dmaBufFd, buffer.stride.toLong() * buffer.height)
                 Posix.close(dmaBufFd)
-                val r = bytes[0].toInt() and 0xFF
+                // Scanout buffers are B8G8R8A8: byte order in memory is B, G, R, A.
+                val b = bytes[0].toInt() and 0xFF
                 val g = bytes[1].toInt() and 0xFF
-                val b = bytes[2].toInt() and 0xFF
+                val r = bytes[2].toInt() and 0xFF
                 val a = bytes[3].toInt() and 0xFF
                 check(r == 255 && g == 0 && b == 0 && a == 255) {
                     "expected clear red (255,0,0,255), got ($r,$g,$b,$a)"

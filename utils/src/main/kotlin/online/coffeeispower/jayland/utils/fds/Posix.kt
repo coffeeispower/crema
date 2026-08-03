@@ -111,7 +111,10 @@ object Posix {
 
     /** `mmap(fd, length)` read-only (PROT_READ, MAP_SHARED), copies [length] bytes into a fresh [ByteArray]. */
     fun mmapRead(fd: Int, length: Long): ByteArray {
-        val addr = mmapHandle.invoke(null, length, PROT_READ, MAP_SHARED, fd, 0L) as MemorySegment
+        // mmap's addr hint must be a real segment, not null: this JDK's FFM
+        // downcall rejects null for ADDRESS arguments, and mmap ignores the
+        // hint anyway.
+        val addr = mmapHandle.invoke(Arena.global().allocate(0L), length, PROT_READ, MAP_SHARED, fd, 0L) as MemorySegment
         val address = addr.address()
         if (address == -1L) error("mmap(fd=$fd, length=$length) failed")
         Arena.ofConfined().use { arena ->
