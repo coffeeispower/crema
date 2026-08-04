@@ -10,18 +10,18 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":jayland-utils"))
-    implementation(project(":jayland-core"))
-    implementation(project(":jayland-vulkan-renderer"))
-    implementation(project(":jayland-blit-targets-drm"))
-    implementation(project(":jayland-blit-targets-win32"))
-    implementation(project(":jayland-blit-targets-wayland"))
+    implementation(project(":crema-utils"))
+    implementation(project(":crema-core"))
+    implementation(project(":crema-vulkan-renderer"))
+    implementation(project(":crema-blit-targets-drm"))
+    implementation(project(":crema-blit-targets-win32"))
+    implementation(project(":crema-blit-targets-wayland"))
 }
 
 application {
     // Define the Fully Qualified Name for the application main class
     // (Note that Kotlin compiles `App.kt` to a class with FQN `com.example.app.AppKt`.)
-    mainClass = "online.coffeeispower.jayland.app.AppKt"
+    mainClass = "online.coffeeispower.crema.app.AppKt"
 
     // FFM/native-access flags so `gradlew run` (and the start scripts from
     // installDist/distZip) work without repeating them on every command line:
@@ -37,7 +37,7 @@ application {
 }
 distributions {
     main {
-        distributionBaseName = "jayland"
+        distributionBaseName = "crema"
 
     }
 }

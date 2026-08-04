@@ -1,14 +1,14 @@
 import io.github.oshai.kotlinlogging.KotlinLogging
-import online.coffeeispower.jayland.core.graphics.Color
-import online.coffeeispower.jayland.core.platform.linux.DrmScanoutBuffer
-import online.coffeeispower.jayland.drm.sys.DrmFormats
-import online.coffeeispower.jayland.drm.sys.Xf86Drm
-import online.coffeeispower.jayland.renderers.vulkan.VulkanRenderer
-import online.coffeeispower.jayland.utils.fds.Posix
+import online.coffeeispower.crema.core.graphics.Color
+import online.coffeeispower.crema.core.platform.linux.DrmScanoutBuffer
+import online.coffeeispower.crema.drm.sys.DrmFormats
+import online.coffeeispower.crema.drm.sys.Xf86Drm
+import online.coffeeispower.crema.renderers.vulkan.VulkanRenderer
+import online.coffeeispower.crema.utils.fds.Posix
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import kotlinx.coroutines.runBlocking
-import online.coffeeispower.jayland.core.graphics.ColorMode
-import online.coffeeispower.jayland.core.graphics.presentation.Swapchain
+import online.coffeeispower.crema.core.graphics.ColorMode
+import online.coffeeispower.crema.core.graphics.presentation.Swapchain
 import java.lang.foreign.Arena
 import java.lang.foreign.ValueLayout
 import java.nio.file.Files
@@ -60,7 +60,7 @@ class AddFbProbeTest {
                     val submission = renderer.beginFrame(buffer) { clear(Color.RED) }
                     val fence = submission.exportInFenceFd()
                     runBlocking {
-                        val d = online.coffeeispower.jayland.utils.fds.PollDispatcher("p")
+                        val d = online.coffeeispower.crema.utils.fds.PollDispatcher("p")
                         Posix.setNonBlocking(fence)
                         d.watch(fence).use { it.awaitReadable() }
                         d.close()

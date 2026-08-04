@@ -1,12 +1,12 @@
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.runBlocking
-import online.coffeeispower.jayland.core.graphics.Color
-import online.coffeeispower.jayland.core.platform.linux.DrmScanoutBuffer
-import online.coffeeispower.jayland.renderers.vulkan.VulkanDeviceManager
-import online.coffeeispower.jayland.renderers.vulkan.VulkanInstance
-import online.coffeeispower.jayland.renderers.vulkan.VulkanRenderer
-import online.coffeeispower.jayland.utils.fds.PollDispatcher
-import online.coffeeispower.jayland.utils.fds.Posix
+import online.coffeeispower.crema.core.graphics.Color
+import online.coffeeispower.crema.core.platform.linux.DrmScanoutBuffer
+import online.coffeeispower.crema.renderers.vulkan.VulkanDeviceManager
+import online.coffeeispower.crema.renderers.vulkan.VulkanInstance
+import online.coffeeispower.crema.renderers.vulkan.VulkanRenderer
+import online.coffeeispower.crema.utils.fds.PollDispatcher
+import online.coffeeispower.crema.utils.fds.Posix
 import kotlin.test.Test
 
 class VulkanTest {

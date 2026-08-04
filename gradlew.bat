@@ -33,7 +33,7 @@ set APP_HOME=%DIRNAME%
 for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
 
 @rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
-@rem jayland: native-access flags silence the JDK 23+ restricted-method warnings from the wrapper client.
+@rem crema: native-access flags silence the JDK 23+ restricted-method warnings from the wrapper client.
 set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m" "--enable-native-access=ALL-UNNAMED" "--sun-misc-unsafe-memory-access=allow"
 
 @rem Find java.exe

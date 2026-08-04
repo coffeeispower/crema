@@ -10,7 +10,7 @@ plugins {
 // Safe wrappers over the raw bindings (DrmFormats, ...) build on core concepts
 // such as ColorMode. core does not depend on drm-sys, so this is acyclic.
 dependencies {
-    implementation(project(":jayland-core"))
+    implementation(project(":crema-core"))
 }
 
 // DRM/KMS is available on Linux and the BSDs (FreeBSD, OpenBSD, NetBSD, DragonFly).
@@ -30,8 +30,8 @@ val jextractVersion = "25-jextract+2-4"
 val jextractBaseUrl = "https://download.java.net/java/early_access/jextract/25/2"
 // Official jextract binaries exist only for Linux/macOS/Windows. On the BSDs the Linux x64
 // binary can be run under Linuxulator (FreeBSD), or provide your own via
-// `-Pjayland.jextractHome=/path/to/jextract` (skips download) or
-// `-Pjayland.jextractArchiveUrl=...` (downloads a custom archive).
+// `-Pcrema.jextractHome=/path/to/jextract` (skips download) or
+// `-Pcrema.jextractArchiveUrl=...` (downloads a custom archive).
 data class JextractBuild(val archive: String, val sha256: String)
 
 val jextractBuilds = mapOf(
@@ -60,19 +60,19 @@ val jextractBuilds = mapOf(
 fun defaultJextractBuild(): JextractBuild? =
     jextractBuilds["$osName-$arch"]
 
-val defaultCacheRoot = File(System.getProperty("user.home"), ".cache/jayland/jextract/$jextractVersion")
-val jextractCacheDir = providers.gradleProperty("jayland.jextractHome")
+val defaultCacheRoot = File(System.getProperty("user.home"), ".cache/crema/jextract/$jextractVersion")
+val jextractCacheDir = providers.gradleProperty("crema.jextractHome")
     .orElse(defaultCacheRoot.absolutePath)
 
 if (!isDrmPlatform) {
-    logger.warn("jayland: DRM/KMS is only supported on Linux and the BSDs (current: ${System.getProperty("os.name")}). The `:drm-sys` module will be skipped.")
+    logger.warn("crema: DRM/KMS is only supported on Linux and the BSDs (current: ${System.getProperty("os.name")}). The `:drm-sys` module will be skipped.")
 }
 
 // Header locations per platform family. Overridable for exotic setups.
 //   Linux:            headers in /usr/include,       UAPI in /usr/include/libdrm
 //   FreeBSD/OpenBSD:  headers in /usr/local/include, UAPI in /usr/local/include/libdrm
 //   NetBSD/DragonFly: headers in /usr/pkg/include,   UAPI in /usr/pkg/include/libdrm
-val drmHeaderDirProvider = providers.gradleProperty("jayland.drmHeaderDir")
+val drmHeaderDirProvider = providers.gradleProperty("crema.drmHeaderDir")
     .orElse(
         when {
             osName == "linux" -> "/usr/include"
@@ -81,22 +81,22 @@ val drmHeaderDirProvider = providers.gradleProperty("jayland.drmHeaderDir")
         }
     )
 
-val libdrmIncludeDirProvider = providers.gradleProperty("jayland.libdrmIncludeDir")
+val libdrmIncludeDirProvider = providers.gradleProperty("crema.libdrmIncludeDir")
     .orElse("${drmHeaderDirProvider.get()}/libdrm")
 
 val downloadJextract = tasks.register<DownloadJextractTask>("downloadJextract") {
     description = "Downloads and caches the jextract binary (the bindgen equivalent for the FFM API)"
     group = "build setup"
 
-    val customUrl = providers.gradleProperty("jayland.jextractArchiveUrl")
+    val customUrl = providers.gradleProperty("crema.jextractArchiveUrl")
     if (customUrl.isPresent) {
         archiveUrl.set(customUrl)
-        expectedSha256.set(providers.gradleProperty("jayland.jextractSha256").orElse(""))
+        expectedSha256.set(providers.gradleProperty("crema.jextractSha256").orElse(""))
         trustWithoutChecksum.set(true)
     } else {
         val build = checkNotNull(defaultJextractBuild()) {
             "No official jextract binary for os/arch `$osName/$arch`. " +
-                "Provide one with `-Pjayland.jextractHome=/path/to/jextract` or `-Pjayland.jextractArchiveUrl=...`."
+                "Provide one with `-Pcrema.jextractHome=/path/to/jextract` or `-Pcrema.jextractArchiveUrl=...`."
         }
         archiveUrl.set("$jextractBaseUrl/${build.archive}")
         expectedSha256.set(build.sha256)

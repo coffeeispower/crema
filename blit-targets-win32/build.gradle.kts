@@ -4,5 +4,5 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":jayland-core"))
+    implementation(project(":crema-core"))
 }

@@ -52,7 +52,7 @@ abstract class GenerateDrmBindingsTask : DefaultTask() {
             "Missing libdrm development headers: ${missing.joinToString()}. " +
                 "Install libdrm first: Arch `sudo pacman -S libdrm`, FreeBSD/OpenBSD `pkg install libdrm`, " +
                 "NetBSD/DragonFly `pkgin install libdrm`, Debian/Ubuntu `sudo apt install libdrm-dev`. " +
-                "Override the header locations with `-Pjayland.drmHeaderDir=... -Pjayland.libdrmIncludeDir=...` if needed."
+                "Override the header locations with `-Pcrema.drmHeaderDir=... -Pcrema.libdrmIncludeDir=...` if needed."
         }
 
         val launcher = toolchainService.launcherFor {
@@ -64,7 +64,7 @@ abstract class GenerateDrmBindingsTask : DefaultTask() {
             commandLine(
                 bin.absolutePath,
                 "--output", outputDir.get().asFile.absolutePath,
-                "--target-package", "online.coffeeispower.jayland.drm.sys",
+                "--target-package", "online.coffeeispower.crema.drm.sys",
                 "--header-class-name", "Xf86Drm",
                 "-l", "drm",
                 "-I", includeDir.absolutePath,

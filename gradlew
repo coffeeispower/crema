@@ -86,7 +86,7 @@ APP_NAME="Gradle"
 APP_BASE_NAME=${0##*/}
 
 # Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
-# jayland: the native-access flags silence the JDK 23+ restricted-method warnings emitted by the
+# crema: the native-access flags silence the JDK 23+ restricted-method warnings emitted by the
 # wrapper client's native-platform library (java.lang.System::load). These apply to the client JVM
 # only; the daemon's args come from org.gradle.jvmargs in gradle.properties. If this script is
 # regenerated with `gradle wrapper`, re-add these flags.

@@ -8,5 +8,5 @@ plugins {
     alias(libs.plugins.kotlinPluginSerialization)
 }
 dependencies {
-    implementation(project(":jayland-utils"))
+    implementation(project(":crema-utils"))
 }

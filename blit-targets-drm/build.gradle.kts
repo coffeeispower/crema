@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":jayland-core"))
-    implementation(project(":jayland-drm-sys"))
-    implementation(project(":jayland-utils"))
+    implementation(project(":crema-core"))
+    implementation(project(":crema-drm-sys"))
+    implementation(project(":crema-utils"))
 }

@@ -1,23 +1,30 @@
-# jayland
+# crema
 
 > The extensible JVM-based Wayland compositor.
 
 ```
-     ___  _______  __   __  ___      _______  __    _  ______
-    |   ||   _   ||  | |  ||   |    |   _   ||  |  | ||      |
-    |   ||  |_|  ||  |_|  ||   |    |  |_|  ||   |_| ||  _    |
-    |   ||       ||       ||   |    |       ||       || | |   |
- ___|   ||       ||_     _||   |___ |       ||  _    || |_|   |
-|       ||   _   |  |   |  |       ||   _   || | |   ||       |
-|_______||__| |__|  |___|  |_______||__| |__||_|  |__||______|
+                                                                              
+      _____        _____        ______        ______  _______         _____   
+  ___|\    \   ___|\    \   ___|\     \      |      \/       \    ___|\    \  
+ /    /\    \ |    |\    \ |     \     \    /          /\     \  /    /\    \ 
+|    |  |    ||    | |    ||     ,_____/|  /     /\   / /\     ||    |  |    |
+|    |  |____||    |/____/ |     \--'\_|/ /     /\ \_/ / /    /||    |__|    |
+|    |   ____ |    |\    \ |     /___/|  |     |  \|_|/ /    / ||    .--.    |
+|    |  |    ||    | |    ||     \____|\ |     |       |    |  ||    |  |    |
+|\ ___\/    /||____| |____||____ '     /||\____\       |____|  /|____|  |____|
+| |   /____/ ||    | |    ||    /_____/ || |    |      |    | / |    |  |    |
+ \|___|    | /|____| |____||____|     | / \|____|      |____|/  |____|  |____|
+   \( |____|/   \(     )/    \( |_____|/     \(          )/       \(      )/  
+    '   )/       '     '      '    )/         '          '         '      '   
+        '                          '                                          
 ```
 
-jayland is a Wayland compositor that runs on the JVM and renders with Vulkan.
-It's a proof of concept that the desktop you rice doesn't have to be written in cluttered C and C++.
+crema is a Wayland compositor that runs on the JVM and renders with Vulkan.
+It's a proof of concept that the desktop you rice doesn't have to be written in cluttered C++.
 Your compositor, config and plugins can be written in a language you actually
 enjoy writing instead of debugging segfaults and link errors.
 
-**Status: early days.** jayland is under heavy construction. It boots, it
+**Status: early days.** crema is under heavy construction. It boots, it
 enumerates hardware, and it renders — but it isn't your daily driver yet.
 Everything below is the target experience; treat it as the roadmap, not the
 release notes.
@@ -30,10 +37,10 @@ release notes.
 - **Extend it in Kotlin or Java.** No C, no C++, no FFI ceremony for your ideas.
   The compositor exposes a plugin API, so your status bar, your animations,
   your window rules, your window tiling strategies are just jar files in a plugins folder.
-- **Vulkan rendering.** Unlike most popular compositors which use OpenGL, Jayland is built for optimal usage 
+- **Vulkan rendering.** Unlike most popular compositors which use OpenGL, Crema is built for optimal usage 
   of your GPU for advanced effects and non-blocking rendering. So you can get that 2k LoC liquid glass shader
   running smoothly.
-- **Multi GPU Support from the get-go**: Jayland doesn't try to hide the complexity of the user's machine topology, it uses all GPUs on the machine to render to each monitor efficiently.
+- **Multi GPU Support from the get-go**: Crema doesn't try to hide the complexity of the user's machine topology, it uses all GPUs on the machine to render to each monitor efficiently.
 
 ## Structure
 
@@ -82,7 +89,7 @@ to the console.
 
 ### Presentation modes
 
-jayland has three personalities, chosen automatically at startup:
+crema has three personalities, chosen automatically at startup:
 
 | Mode                 | What you get                                          | Where                                                 |
 |----------------------|-------------------------------------------------------|-------------------------------------------------------|
@@ -124,8 +131,8 @@ But those performance problems have been solved in newer versions:
 - JIT compiles hot paths to machine code at runtime, making them run at speeds that resemble systems languages like Rust or C++.
 - Java is battle-tested in backend and server workloads for years now that have a lot of CPU-bound and IO-bound operations.
 
-Kotlin also provides good async support with coroutines, which were integrated into jayland for non-blocking VSync support and structured concurrency,
-so jayland doesn't need to spawn OS threads for each monitor, the kotlin runtime manages wait points instead of doing like most C and C++ compositors
+Kotlin also provides good async support with coroutines, which were integrated into crema for non-blocking VSync support and structured concurrency,
+so crema doesn't need to spawn OS threads for each monitor, the kotlin runtime manages wait points instead of doing like most C and C++ compositors
 that use a manual error-prone harder-to-reason-about event-loop.
 
 
@@ -138,4 +145,3 @@ that use a manual error-prone harder-to-reason-about event-loop.
 
 The project uses the Gradle wrapper (`./gradlew`), a version catalog
 (`gradle/libs.versions.toml`), and shared build logic in `buildSrc`.
-See `AGENTS.md` for the module layout.

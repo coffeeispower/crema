@@ -1,4 +1,4 @@
-# jayland — MVP roadmap
+# crema — MVP roadmap
 
 > **Definition of MVP:** a compositor you can use as a daily driver — launch apps,
 > type, click, copy/paste, move/resize windows, run a bar, use multiple monitors,
@@ -100,9 +100,9 @@ Working assumptions baked in: client-side decorations for MVP (via
 - [ ] User config: outputs/layout, keybinds, background color, exec-on-startup
 - [ ] Keybind dispatch: launch apps, toggle fullscreen, focus next, close, switch output
 - [ ] `exec` support (spawn a terminal/app from a keybind or config)
-- [ ] **IPC control surface:** unix socket at `$XDG_RUNTIME_DIR/jayland/jayland.sock` (0700 dir — per-user access control, same model as sway)
+- [ ] **IPC control surface:** unix socket at `$XDG_RUNTIME_DIR/crema/crema.sock` (0700 dir — per-user access control, same model as sway)
   - **Decision:** unix socket, not WebSocket/TCP — a TCP localhost control port is reachable by any local user's processes, and the API carries `exec`-grade power
-- [ ] Shared `jayland-ipc` contract module: `@Serializable` sealed `Command`/`Response` types + protocol version field (tRPC-style type safety by sharing code)
+- [ ] Shared `crema-ipc` contract module: `@Serializable` sealed `Command`/`Response` types + protocol version field (tRPC-style type safety by sharing code)
 - [ ] Framing: length-prefixed JSON with request IDs (kotlinx.serialization is already in the catalog)
 - [ ] `jayctl` CLI (Clikt) as the reference client; event subscriptions as a stream over the same socket
 - [ ] Plugin command registry — plugins register IPC commands, the CLI grows with the system
@@ -118,7 +118,7 @@ Working assumptions baked in: client-side decorations for MVP (via
 ## Phase 14 — Runtime plugin system (Bukkit-style, out-of-tree) — *the extensibility payoff, last*
 
 **API surface (`plugin-api` module)**
-- [ ] `JaylandPlugin` base class: `onLoad()` → `onEnable()` → `onDisable()`, per-plugin `getDataFolder()`
+- [ ] `CremaPlugin` base class: `onLoad()` → `onEnable()` → `onDisable()`, per-plugin `getDataFolder()`
 - [ ] Event bus: `@EventHandler`, priority ordering, cancellation — dispatched on the event-loop thread, never blocking the frame path
 - [ ] Services manager: plugins provide/consume APIs
 - [ ] Scheduler: delayed/repeating tasks + frame-callback-synced tasks
@@ -142,8 +142,8 @@ Working assumptions baked in: client-side decorations for MVP (via
 - [ ] Throwing protocol handlers disable that plugin, never the compositor
 
 **Out-of-tree development**
-- [ ] Publish the `plugin-api` jar (Maven Central or a simple repo) so plugins build without the jayland source tree
-- [ ] Plugin archetype/template project: Gradle setup, depends only on `jayland-plugin-api`
+- [ ] Publish the `plugin-api` jar (Maven Central or a simple repo) so plugins build without the crema source tree
+- [ ] Plugin archetype/template project: Gradle setup, depends only on `crema-plugin-api`
 - [ ] Install = drop the jar into `plugins/`; delete = remove it (documented, demo'd with a real plugin)
 
 ---
