@@ -30,3 +30,12 @@ include(":blit-targets-win32")
 include(":blit-targets-wayland")
 
 rootProject.name = "jayland"
+project(":app").name = "jayland"
+project(":vulkan-renderer").name = "jayland-vulkan-renderer"
+project(":utils").name = "jayland-utils"
+project(":core").name = "jayland-core"
+project(":lwjgl-utils").name = "jayland-lwjgl-utils"
+project(":drm-sys").name = "jayland-drm-sys"
+project(":blit-targets-drm").name = "jayland-blit-targets-drm"
+project(":blit-targets-win32").name = "jayland-blit-targets-win32"
+project(":blit-targets-wayland").name = "jayland-blit-targets-wayland"

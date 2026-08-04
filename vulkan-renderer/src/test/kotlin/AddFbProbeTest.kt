@@ -1,11 +1,14 @@
 import io.github.oshai.kotlinlogging.KotlinLogging
-import online.coffeeispower.jayland.core.Color
+import online.coffeeispower.jayland.core.graphics.Color
 import online.coffeeispower.jayland.core.platform.linux.DrmScanoutBuffer
+import online.coffeeispower.jayland.drm.sys.DrmFormats
 import online.coffeeispower.jayland.drm.sys.Xf86Drm
 import online.coffeeispower.jayland.renderers.vulkan.VulkanRenderer
 import online.coffeeispower.jayland.utils.fds.Posix
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import kotlinx.coroutines.runBlocking
+import online.coffeeispower.jayland.core.graphics.ColorMode
+import online.coffeeispower.jayland.core.graphics.presentation.Swapchain
 import java.lang.foreign.Arena
 import java.lang.foreign.ValueLayout
 import java.nio.file.Files
@@ -27,7 +30,7 @@ class AddFbProbeTest {
             offsets.set(ValueLayout.JAVA_INT, 0L, 0)
             modifiers.set(ValueLayout.JAVA_LONG, 0L, modifier)
             val ret = Xf86Drm.drmModeAddFB2WithModifiers(
-                fd, width, height, 0x34325258, // XRGB8888
+                fd, width, height, DrmFormats.XRGB8888,
                 handles, pitches, offsets, modifiers, outId, flags,
             )
             if (ret == 0) return outId.get(ValueLayout.JAVA_INT, 0).toLong()
@@ -92,7 +95,14 @@ class AddFbProbeTest {
                 val capsRet = Xf86Drm.drmSetClientCap(fd, Xf86Drm.DRM_CLIENT_CAP_ATOMIC().toLong(), 1L)
                 val capsRet2 = Xf86Drm.drmSetClientCap(fd, Xf86Drm.DRM_CLIENT_CAP_UNIVERSAL_PLANES().toLong(), 1L)
                 logger.info { "drmSetClientCap ATOMIC=$capsRet UNIVERSAL_PLANES=$capsRet2" }
-                val swapchain = online.coffeeispower.jayland.core.Swapchain(1920, 1200, online.coffeeispower.jayland.core.ColorMode.RGBA8, depth = 2, vram, allowedModifiers = listOf(0L)) // DRM_FORMAT_MOD_LINEAR
+                val swapchain = Swapchain(
+                    1920,
+                    1200,
+                    ColorMode.RGBA8,
+                    depth = 2,
+                    vram,
+                    allowedModifiers = listOf(0L)
+                ) // DRM_FORMAT_MOD_LINEAR
                 val bufs = runBlocking {
                     listOf(swapchain.acquireBuffer(), swapchain.acquireBuffer())
                 }

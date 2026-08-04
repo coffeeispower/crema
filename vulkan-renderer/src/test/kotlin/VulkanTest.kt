@@ -1,6 +1,6 @@
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.runBlocking
-import online.coffeeispower.jayland.core.Color
+import online.coffeeispower.jayland.core.graphics.Color
 import online.coffeeispower.jayland.core.platform.linux.DrmScanoutBuffer
 import online.coffeeispower.jayland.renderers.vulkan.VulkanDeviceManager
 import online.coffeeispower.jayland.renderers.vulkan.VulkanInstance
@@ -42,7 +42,7 @@ class VulkanTest {
             val submission = renderer.beginFrame(buffer) {
                 clear(Color.RED)
             }
-            runBlocking { submission.signal.awaitSignaled() }
+            runBlocking { submission.latch.await() }
             submission.close()
             buffer.close()
         }

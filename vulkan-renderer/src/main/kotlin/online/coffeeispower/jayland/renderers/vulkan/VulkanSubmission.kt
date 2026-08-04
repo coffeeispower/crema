@@ -1,7 +1,7 @@
 package online.coffeeispower.jayland.renderers.vulkan
 
-import online.coffeeispower.jayland.core.Signal
-import online.coffeeispower.jayland.core.Submission
+import online.coffeeispower.jayland.core.synchronization.Latch
+import online.coffeeispower.jayland.core.graphics.gpu.Submission
 import online.coffeeispower.jayland.lwjgl.memStack
 import online.coffeeispower.jayland.lwjgl.outInt
 import online.coffeeispower.jayland.utils.fds.PollDispatcher
@@ -16,7 +16,7 @@ import org.lwjgl.vulkan.VkSemaphoreGetFdInfoKHR
  * A [Submission] backed by a binary semaphore that is exported (exactly once)
  * as a `SYNC_FD` on first use. The exported fd can be handed to a presentation
  * backend with [exportInFenceFd] (ownership transfers to the caller), while a
- * duplicated fd keeps [signal] awaitable in software — the kernel waiting on
+ * duplicated fd keeps [latch] awaitable in software — the kernel waiting on
  * the in-fence and a software waiter can never race on the same descriptor.
  */
 class VulkanSubmission(
@@ -32,9 +32,9 @@ class VulkanSubmission(
     private var waitFd = -1
     private var closed = false
 
-    override val signal: Signal by lazy {
-        object : Signal {
-            override suspend fun awaitSignaled() {
+    override val latch: Latch by lazy {
+        object : Latch {
+            override suspend fun await() {
                 val fd = dupWaitFd()
                 dispatcher.watch(fd).use { poller ->
                     poller.awaitReadable()

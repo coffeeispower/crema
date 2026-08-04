@@ -1,7 +1,6 @@
 package online.coffeeispower.jayland.app
 
 import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
-import online.coffeeispower.jayland.core.*;
 import online.coffeeispower.jayland.renderers.vulkan.*;
 import online.coffeeispower.jayland.blitTargets.drm.*;
 import online.coffeeispower.jayland.blitTargets.win32.*;
@@ -9,6 +8,16 @@ import online.coffeeispower.jayland.blitTargets.wayland.*;
 import online.coffeeispower.jayland.utils.errors.*
 import online.coffeeispower.jayland.utils.logging.LogArchiver
 import kotlinx.coroutines.CoroutineScope
+import online.coffeeispower.jayland.core.graphics.Color
+import online.coffeeispower.jayland.core.graphics.presentation.Frame
+import online.coffeeispower.jayland.core.monitors.Output
+import online.coffeeispower.jayland.core.graphics.renderer.Renderer
+import online.coffeeispower.jayland.core.input.InputManager
+import online.coffeeispower.jayland.core.platform.Backend
+import online.coffeeispower.jayland.core.platform.BackendConfig
+import online.coffeeispower.jayland.core.platform.EventLoop
+import online.coffeeispower.jayland.core.platform.EventLoopEvent
+import online.coffeeispower.jayland.core.platform.PlatformBackend
 
 fun main() {
 
@@ -88,7 +97,7 @@ fun main() {
 /**
  * Produces one frame for [output]: acquire a buffer from its swapchain, record
  * and dispatch the frame's commands into it, then commit it to the screen.
- * [Committer.commit] suspends until the page flip completes; [Submission.close] is always
+ * [online.coffeeispower.jayland.core.graphics.presentation.Committer.commit] suspends until the page flip completes; [Submission.close] is always
  * run (even on cancellation) so the in-fence is released exactly once.
  */
 private suspend fun CoroutineScope.renderFrame(renderer: Renderer, output: Output) {

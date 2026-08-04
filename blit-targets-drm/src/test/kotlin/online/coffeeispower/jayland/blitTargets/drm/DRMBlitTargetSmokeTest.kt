@@ -1,6 +1,7 @@
 package online.coffeeispower.jayland.blitTargets.drm
 
-import online.coffeeispower.jayland.core.ColorMode
+import online.coffeeispower.jayland.core.graphics.ColorMode
+import online.coffeeispower.jayland.drm.sys.DrmFormats
 import online.coffeeispower.jayland.drm.sys.Xf86Drm
 import online.coffeeispower.jayland.drm.sys._drmModeConnector
 import online.coffeeispower.jayland.drm.sys._drmModeEncoder
@@ -8,11 +9,11 @@ import online.coffeeispower.jayland.drm.sys._drmModePlane
 import online.coffeeispower.jayland.drm.sys._drmModePlaneRes
 import online.coffeeispower.jayland.drm.sys._drmModePropertyBlob
 import online.coffeeispower.jayland.drm.sys._drmModeRes
+import online.coffeeispower.jayland.drm.sys.drmFourcc
 import online.coffeeispower.jayland.drm.sys.drm_format_modifier
 import online.coffeeispower.jayland.drm.sys.drm_format_modifier_blob
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.lang.foreign.Arena
-import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 import java.nio.file.Files
 import java.nio.file.Path

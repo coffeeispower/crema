@@ -1,6 +1,13 @@
-package online.coffeeispower.jayland.core
+package online.coffeeispower.jayland.core.platform
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import online.coffeeispower.jayland.core.input.InputManager
+import online.coffeeispower.jayland.core.graphics.renderer.Renderer
+import online.coffeeispower.jayland.core.graphics.gpu.DeviceManager
+import online.coffeeispower.jayland.core.graphics.presentation.BlitTarget
+import online.coffeeispower.jayland.core.monitors.Connector
+import online.coffeeispower.jayland.core.monitors.Mode
+import online.coffeeispower.jayland.core.monitors.Output
 import online.coffeeispower.jayland.utils.errors.UnsupportedPlatformException
 
 /**
@@ -93,9 +100,10 @@ class Backend private constructor(
                     logger.warn(e) { "Backend '${config.name}' is not fully implemented yet, skipping" }
                 } catch (e: UnsupportedPlatformException) {
                     logger.info(e) { "Backend '${config.name}' is not supported, trying the next one" }
-                } catch (e: Exception) {
-                    logger.error(e) { "Backend '${config.name}' failed unexpectedly, trying the next one" }
                 }
+                // Any other exception is a bug in the backend under test, not an
+                // unsupported platform: let it crash loudly instead of silently
+                // falling through to a backend that may render nothing at all.
             }
             val tried = availableBackends.joinToString(", ") { "'${it.name}'" }
             throw UnsupportedPlatformException(reason = "no usable backend was found (tried: $tried)")

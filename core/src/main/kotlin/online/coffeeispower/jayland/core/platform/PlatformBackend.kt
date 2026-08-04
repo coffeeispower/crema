@@ -1,4 +1,7 @@
-package online.coffeeispower.jayland.core
+package online.coffeeispower.jayland.core.platform
+
+import online.coffeeispower.jayland.core.input.InputManager
+import online.coffeeispower.jayland.core.graphics.presentation.BlitTarget
 
 /**
  * A platform's presentation, input and event loop, created together by a

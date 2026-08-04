@@ -1,6 +1,9 @@
-package online.coffeeispower.jayland.core
+package online.coffeeispower.jayland.core.graphics.presentation
 
 import kotlinx.coroutines.sync.Semaphore
+import online.coffeeispower.jayland.core.graphics.ColorMode
+import online.coffeeispower.jayland.core.platform.linux.GPUScanoutBuffer
+import online.coffeeispower.jayland.core.graphics.gpu.VRam
 
 /**
  * A rotating pool of [GPUScanoutBuffer]s used for presentation. [acquireBuffer]
@@ -26,15 +29,18 @@ class Swapchain(
     allowedModifiers: List<Long>? = null,
 ) : AutoCloseable {
 
+    // Validated before any allocation: init blocks run in declaration order, so
+    // a bad depth fails the constructor before a single buffer is created (and
+    // before the pool could deadlock on a zero-permit semaphore).
+    init {
+        require(depth >= 1) { "Swapchain depth must be at least 1" }
+    }
+
     private val buffers = List(depth) { vram.allocateBufferForScanout(width, height, colorMode, allowedModifiers) }
     private val free = ArrayDeque<GPUScanoutBuffer>().apply { addAll(buffers) }
     private val freeSlots = Semaphore(depth)
     private val lock = Any()
     private var closed = false
-
-    init {
-        require(depth >= 1) { "Swapchain depth must be at least 1" }
-    }
 
     /** Returns the next free buffer, suspending until one is available. */
     suspend fun acquireBuffer(): GPUScanoutBuffer {

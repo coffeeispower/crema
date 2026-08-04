@@ -4,31 +4,31 @@ import kotlinx.coroutines.channels.Channel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import online.coffeeispower.jayland.core.Backend
-import online.coffeeispower.jayland.core.BackendConfig
-import online.coffeeispower.jayland.core.BlitTarget
-import online.coffeeispower.jayland.core.ColorMode
-import online.coffeeispower.jayland.core.Committer
-import online.coffeeispower.jayland.core.Connector
-import online.coffeeispower.jayland.core.ConnectorManager
-import online.coffeeispower.jayland.core.DeviceManager
-import online.coffeeispower.jayland.core.EventLoop
-import online.coffeeispower.jayland.core.EventLoopEvent
-import online.coffeeispower.jayland.core.Frame
-import online.coffeeispower.jayland.core.FrameRecording
-import online.coffeeispower.jayland.core.FrameResult
-import online.coffeeispower.jayland.core.GPU
-import online.coffeeispower.jayland.core.GPUScanoutBuffer
-import online.coffeeispower.jayland.core.InputManager
-import online.coffeeispower.jayland.core.Mode
-import online.coffeeispower.jayland.core.Monitor
-import online.coffeeispower.jayland.core.Output
-import online.coffeeispower.jayland.core.PlatformBackend
-import online.coffeeispower.jayland.core.Renderer
-import online.coffeeispower.jayland.core.Signal
-import online.coffeeispower.jayland.core.Submission
-import online.coffeeispower.jayland.core.Swapchain
-import online.coffeeispower.jayland.core.VRam
+import online.coffeeispower.jayland.core.platform.Backend
+import online.coffeeispower.jayland.core.platform.BackendConfig
+import online.coffeeispower.jayland.core.graphics.presentation.BlitTarget
+import online.coffeeispower.jayland.core.graphics.ColorMode
+import online.coffeeispower.jayland.core.graphics.presentation.Committer
+import online.coffeeispower.jayland.core.monitors.Connector
+import online.coffeeispower.jayland.core.monitors.ConnectorManager
+import online.coffeeispower.jayland.core.graphics.gpu.DeviceManager
+import online.coffeeispower.jayland.core.platform.EventLoop
+import online.coffeeispower.jayland.core.platform.EventLoopEvent
+import online.coffeeispower.jayland.core.graphics.presentation.Frame
+import online.coffeeispower.jayland.core.graphics.renderer.FrameRecording
+import online.coffeeispower.jayland.core.graphics.presentation.FrameResult
+import online.coffeeispower.jayland.core.graphics.gpu.GPU
+import online.coffeeispower.jayland.core.platform.linux.GPUScanoutBuffer
+import online.coffeeispower.jayland.core.input.InputManager
+import online.coffeeispower.jayland.core.monitors.Mode
+import online.coffeeispower.jayland.core.monitors.Monitor
+import online.coffeeispower.jayland.core.monitors.Output
+import online.coffeeispower.jayland.core.platform.PlatformBackend
+import online.coffeeispower.jayland.core.graphics.renderer.Renderer
+import online.coffeeispower.jayland.core.synchronization.Latch
+import online.coffeeispower.jayland.core.graphics.gpu.Submission
+import online.coffeeispower.jayland.core.graphics.presentation.Swapchain
+import online.coffeeispower.jayland.core.graphics.gpu.VRam
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -173,8 +173,8 @@ private class FakeRenderer : Renderer() {
 
 private class FakeSubmission : Submission {
     override val gpu: GPU = FakeGPU()
-    override val signal = object : Signal {
-        override suspend fun awaitSignaled() = Unit
+    val latch = object : Latch {
+        override suspend fun await() = Unit
     }
     override fun exportInFenceFd(): Int = -1
     override fun close() = Unit

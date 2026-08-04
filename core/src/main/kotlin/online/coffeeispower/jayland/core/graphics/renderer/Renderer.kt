@@ -1,4 +1,8 @@
-package online.coffeeispower.jayland.core
+package online.coffeeispower.jayland.core.graphics.renderer
+
+import online.coffeeispower.jayland.core.graphics.gpu.DeviceManager
+import online.coffeeispower.jayland.core.platform.linux.GPUScanoutBuffer
+import online.coffeeispower.jayland.core.graphics.gpu.Submission
 
 abstract class Renderer : AutoCloseable {
     abstract val deviceManager: DeviceManager

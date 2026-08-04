@@ -10,12 +10,12 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":utils"))
-    implementation(project(":core"))
-    implementation(project(":vulkan-renderer"))
-    implementation(project(":blit-targets-drm"))
-    implementation(project(":blit-targets-win32"))
-    implementation(project(":blit-targets-wayland"))
+    implementation(project(":jayland-utils"))
+    implementation(project(":jayland-core"))
+    implementation(project(":jayland-vulkan-renderer"))
+    implementation(project(":jayland-blit-targets-drm"))
+    implementation(project(":jayland-blit-targets-win32"))
+    implementation(project(":jayland-blit-targets-wayland"))
 }
 
 application {
@@ -28,9 +28,16 @@ application {
     //  - `--enable-native-access=ALL-UNNAMED` unblocks java.lang.foreign access
     //    (jextract-generated libdrm bindings, LWJGL, Posix helpers).
     //  - `--sun-misc-unsafe-memory-access=allow` restores sun.misc.Unsafe memory
-    //    access on JDK 23+ (used by some native bridges).
+    //    access on JDK 23+. This is used by LWJGL although this is deprecated.
     applicationDefaultJvmArgs = listOf(
         "--enable-native-access=ALL-UNNAMED",
         "--sun-misc-unsafe-memory-access=allow",
+        "-XX:+UseShenandoahGC"
     )
+}
+distributions {
+    main {
+        distributionBaseName = "jayland"
+
+    }
 }

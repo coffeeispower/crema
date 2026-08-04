@@ -7,9 +7,9 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.selects.select
-import online.coffeeispower.jayland.core.Connector
-import online.coffeeispower.jayland.core.EventLoop
-import online.coffeeispower.jayland.core.EventLoopEvent
+import online.coffeeispower.jayland.core.monitors.Connector
+import online.coffeeispower.jayland.core.platform.EventLoop
+import online.coffeeispower.jayland.core.platform.EventLoopEvent
 import online.coffeeispower.jayland.drm.sys.Xf86Drm
 import online.coffeeispower.jayland.drm.sys._drmEventContext
 import online.coffeeispower.jayland.utils.fds.PollDispatcher

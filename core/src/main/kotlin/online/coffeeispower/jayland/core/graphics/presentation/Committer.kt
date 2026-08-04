@@ -1,4 +1,4 @@
-package online.coffeeispower.jayland.core
+package online.coffeeispower.jayland.core.graphics.presentation
 
 /**
  * Presents frames produced by the compositor to a [BlitTarget]. [commit]

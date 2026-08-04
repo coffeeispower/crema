@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":core"))
-    implementation(project(":drm-sys"))
-    implementation(project(":utils"))
+    implementation(project(":jayland-core"))
+    implementation(project(":jayland-drm-sys"))
+    implementation(project(":jayland-utils"))
 }

@@ -56,10 +56,6 @@ class PollDispatcher(
         return FdPoller(fd, this, channel)
     }
 
-    internal suspend fun awaitReadable(fd: Int) {
-        channels.getValue(fd).receive()
-    }
-
     internal fun unwatch(fd: Int, channel: Channel<Unit>) {
         if (channels.remove(fd, channel)) {
             Epoll.ctlDel(epollFd, fd)

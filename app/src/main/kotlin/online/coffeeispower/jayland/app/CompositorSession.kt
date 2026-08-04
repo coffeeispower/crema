@@ -1,17 +1,17 @@
 package online.coffeeispower.jayland.app
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import online.coffeeispower.jayland.core.Backend
-import online.coffeeispower.jayland.core.Connector
-import online.coffeeispower.jayland.core.EventLoopEvent
-import online.coffeeispower.jayland.core.Output
+import online.coffeeispower.jayland.core.platform.Backend
+import online.coffeeispower.jayland.core.monitors.Connector
+import online.coffeeispower.jayland.core.platform.EventLoopEvent
+import online.coffeeispower.jayland.core.monitors.Output
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 /**
  * Owns the backend's lifecycle and per-output render loops for the lifetime of
@@ -64,11 +64,9 @@ class CompositorSession(
         started = true
         val teardownDone = CountDownLatch(1)
         val hook = Thread({
-            backend.eventLoop.close()
-            if (!teardownDone.await(WATCHDOG_MS, TimeUnit.MILLISECONDS)) {
-                logger.error { "Shutdown watchdog fired; forcing exit" }
-                Runtime.getRuntime().halt(1)
-            }
+            shutdown()
+            logger.error { "Shutdown watchdog fired; forcing exit" }
+            Runtime.getRuntime().halt(1)
         }, "jayland-shutdown").apply { isDaemon = false }
         Runtime.getRuntime().addShutdownHook(hook)
         try {
@@ -137,7 +135,18 @@ class CompositorSession(
         }
         output.use { output ->
             while (!output.detached) {
-                renderOneFrame(output)
+                try {
+                    renderOneFrame(output)
+                } catch (e: CancellationException) {
+                    // Shutdown: never swallow cancellation, or cancelAndJoin in
+                    // shutdown() would wait on a loop that keeps going forever.
+                    throw e
+                } catch (t: Throwable) {
+                    // One bad frame must not kill the render loop. The committer
+                    // already returned the frame's buffer to the swapchain, so
+                    // retrying cannot starve the pool; log and try the next one.
+                    logger.error(t) { "Frame failed on output ${connector.monitor.name}; continuing" }
+                }
             }
         }
     }
@@ -157,9 +166,4 @@ class CompositorSession(
     }
 
     override fun close() = shutdown()
-
-    private companion object {
-        /** How long the shutdown watchdog waits for the main thread's teardown before force-exiting. */
-        const val WATCHDOG_MS = 10_000L
-    }
 }

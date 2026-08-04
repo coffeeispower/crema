@@ -1,9 +1,9 @@
 package online.coffeeispower.jayland.renderers.vulkan
 
-import online.coffeeispower.jayland.core.FrameRecording
-import online.coffeeispower.jayland.core.GPUScanoutBuffer
-import online.coffeeispower.jayland.core.Renderer
-import online.coffeeispower.jayland.core.Submission
+import online.coffeeispower.jayland.core.graphics.renderer.FrameRecording
+import online.coffeeispower.jayland.core.platform.linux.GPUScanoutBuffer
+import online.coffeeispower.jayland.core.graphics.renderer.Renderer
+import online.coffeeispower.jayland.core.graphics.gpu.Submission
 import online.coffeeispower.jayland.lwjgl.memStack
 import online.coffeeispower.jayland.lwjgl.outLong
 import online.coffeeispower.jayland.lwjgl.outPointer
@@ -86,6 +86,7 @@ class VulkanRenderer : Renderer() {
         }
     }
 
+    //<editor-fold desc="Command buffer and semaphore boilerplate">
     private fun commandBufferFor(buffer: VulkanGPUScanoutBuffer): VkCommandBuffer {
         val pool = commandPools.computeIfAbsent(buffer.owner) { commandPoolFor(it) }
         return memStack {
@@ -139,10 +140,18 @@ class VulkanRenderer : Renderer() {
     override fun close() {
         if (closed) return
         closed = true
+        // Spec-safe teardown order: vkDestroyCommandPool is undefined behavior
+        // if any of the pool's command buffers are still pending, so idle every
+        // GPU that owns a pool before destroying anything device-bound. This
+        // also covers the images vram.close() frees during gpu.close() below.
+        commandPools.keys.forEach { gpu ->
+            vkDeviceWaitIdle(gpu.device).checkAsVkError("wait for device idle on ${gpu.name}")
+        }
         commandBuffers.clear()
         commandPools.forEach { (gpu, pool) -> vkDestroyCommandPool(gpu.device, pool, null) }
         commandPools.clear()
         dispatcher.close()
         super.close()
     }
+    //</editor-fold>
 }

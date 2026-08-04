@@ -1,7 +1,5 @@
 package online.coffeeispower.jayland.core.platform.linux
 
-import online.coffeeispower.jayland.core.GPUScanoutBuffer
-
 /**
  * A [GPUScanoutBuffer] whose backing memory can be imported into the DRM/KMS
  * stack, exposing the format, tiling modifier and DMA-BUF fd the kernel needs

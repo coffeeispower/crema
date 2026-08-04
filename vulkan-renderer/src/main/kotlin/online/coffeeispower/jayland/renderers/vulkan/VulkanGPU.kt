@@ -2,8 +2,9 @@ package online.coffeeispower.jayland.renderers.vulkan
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import online.coffeeispower.jayland.core.platform.linux.DrmGPU
-import online.coffeeispower.jayland.core.DrmProps
-import online.coffeeispower.jayland.core.VRam
+import online.coffeeispower.jayland.core.platform.linux.DrmProps
+import online.coffeeispower.jayland.core.graphics.gpu.VRam
+import online.coffeeispower.jayland.drm.sys.DrmFormats
 import online.coffeeispower.jayland.lwjgl.CStr
 import online.coffeeispower.jayland.lwjgl.memStack
 import online.coffeeispower.jayland.lwjgl.outInt
@@ -212,6 +213,12 @@ class VulkanGPU(
     override fun close() {
         if (closed) return
         closed = true
+        if (lazyDevice.isInitialized()) {
+            // Destroying images or the device while queue work still references
+            // them is undefined behavior; wait for any remaining work. Harmless
+            // no-op when the device is already idle (e.g. after renderer.close).
+            vkDeviceWaitIdle(lazyDevice.value).checkAsVkError("wait for device idle on $name")
+        }
         vram.close()
         if (lazyDevice.isInitialized()) {
             logger.debug { "Destroying logical device for $name" }

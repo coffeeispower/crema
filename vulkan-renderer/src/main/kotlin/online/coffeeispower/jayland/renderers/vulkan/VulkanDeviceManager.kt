@@ -1,7 +1,7 @@
 package online.coffeeispower.jayland.renderers.vulkan
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import online.coffeeispower.jayland.core.DeviceManager
+import online.coffeeispower.jayland.core.graphics.gpu.DeviceManager
 import online.coffeeispower.jayland.lwjgl.memStack
 import online.coffeeispower.jayland.lwjgl.outInt
 import org.lwjgl.vulkan.VK10.vkEnumeratePhysicalDevices

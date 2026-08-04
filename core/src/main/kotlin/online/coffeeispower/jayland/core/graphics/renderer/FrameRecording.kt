@@ -1,4 +1,10 @@
-package online.coffeeispower.jayland.core
+package online.coffeeispower.jayland.core.graphics.renderer
+
+import online.coffeeispower.jayland.core.graphics.Color
+import online.coffeeispower.jayland.core.graphics.Rectangle
+import online.coffeeispower.jayland.core.graphics.RoundedRectangle
+import online.coffeeispower.jayland.core.graphics.gpu.GPU
+import online.coffeeispower.jayland.core.platform.linux.GPUScanoutBuffer
 
 /**
  * The commands queued into a single frame recorded for a [buffer].
@@ -17,4 +23,8 @@ interface FrameRecording {
 
     /** Queues a fill of [buffer] with [color]. */
     fun clear(color: Color)
+
+    fun drawRect(rect: Rectangle, fillColor: Color);
+    fun drawRect(rect: RoundedRectangle, fillColor: Color);
+    fun drawRectBorder(rect: RoundedRectangle, fillColor: Color);
 }

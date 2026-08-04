@@ -1,11 +1,11 @@
 package online.coffeeispower.jayland.blitTargets.drm
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import online.coffeeispower.jayland.core.BlitTarget
-import online.coffeeispower.jayland.core.Connector
-import online.coffeeispower.jayland.core.ConnectorManager
-import online.coffeeispower.jayland.core.EventLoop
-import online.coffeeispower.jayland.core.GPU
+import online.coffeeispower.jayland.core.graphics.presentation.BlitTarget
+import online.coffeeispower.jayland.core.monitors.Connector
+import online.coffeeispower.jayland.core.monitors.ConnectorManager
+import online.coffeeispower.jayland.core.platform.EventLoop
+import online.coffeeispower.jayland.core.graphics.gpu.GPU
 import online.coffeeispower.jayland.core.platform.linux.DrmGPU
 import online.coffeeispower.jayland.utils.errors.UnsupportedPlatformException
 

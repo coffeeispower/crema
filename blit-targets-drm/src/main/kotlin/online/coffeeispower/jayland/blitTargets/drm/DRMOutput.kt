@@ -1,10 +1,10 @@
 package online.coffeeispower.jayland.blitTargets.drm
 
-import online.coffeeispower.jayland.core.Committer
-import online.coffeeispower.jayland.core.Mode
-import online.coffeeispower.jayland.core.Monitor
-import online.coffeeispower.jayland.core.Output
-import online.coffeeispower.jayland.core.Swapchain
+import online.coffeeispower.jayland.core.graphics.presentation.Committer
+import online.coffeeispower.jayland.core.monitors.Mode
+import online.coffeeispower.jayland.core.monitors.Monitor
+import online.coffeeispower.jayland.core.monitors.Output
+import online.coffeeispower.jayland.core.graphics.presentation.Swapchain
 import online.coffeeispower.jayland.drm.sys.Xf86Drm
 import java.lang.foreign.MemorySegment
 

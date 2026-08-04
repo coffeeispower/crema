@@ -1,12 +1,12 @@
 package online.coffeeispower.jayland.blitTargets.drm
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import online.coffeeispower.jayland.core.Connector
-import online.coffeeispower.jayland.core.ConnectorManager
-import online.coffeeispower.jayland.core.GPU
-import online.coffeeispower.jayland.core.Mode
-import online.coffeeispower.jayland.core.Monitor
-import online.coffeeispower.jayland.core.ColorMode
+import online.coffeeispower.jayland.core.monitors.Connector
+import online.coffeeispower.jayland.core.monitors.ConnectorManager
+import online.coffeeispower.jayland.core.graphics.gpu.GPU
+import online.coffeeispower.jayland.core.monitors.Mode
+import online.coffeeispower.jayland.core.monitors.Monitor
+import online.coffeeispower.jayland.core.graphics.ColorMode
 import online.coffeeispower.jayland.drm.sys.Xf86Drm
 import online.coffeeispower.jayland.drm.sys._drmModeConnector
 import online.coffeeispower.jayland.drm.sys._drmModeEncoder

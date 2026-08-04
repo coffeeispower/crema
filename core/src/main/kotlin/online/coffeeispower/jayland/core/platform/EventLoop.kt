@@ -1,6 +1,7 @@
-package online.coffeeispower.jayland.core
+package online.coffeeispower.jayland.core.platform
 
 import kotlinx.coroutines.CoroutineScope
+import online.coffeeispower.jayland.core.monitors.Connector
 
 sealed interface EventLoopEvent {
     data class StartMonitors(val connectors: List<Connector>) : EventLoopEvent

@@ -1,4 +1,7 @@
-package online.coffeeispower.jayland.core
+package online.coffeeispower.jayland.core.platform
+
+import online.coffeeispower.jayland.core.graphics.renderer.Renderer
+import online.coffeeispower.jayland.core.graphics.gpu.DeviceManager
 
 /**
  * A candidate backend, described by the [presentationBackend], optional

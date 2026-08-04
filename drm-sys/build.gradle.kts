@@ -7,6 +7,12 @@ plugins {
     id("buildsrc.convention.kotlin-jvm")
 }
 
+// Safe wrappers over the raw bindings (DrmFormats, ...) build on core concepts
+// such as ColorMode. core does not depend on drm-sys, so this is acyclic.
+dependencies {
+    implementation(project(":jayland-core"))
+}
+
 // DRM/KMS is available on Linux and the BSDs (FreeBSD, OpenBSD, NetBSD, DragonFly).
 val osName = System.getProperty("os.name").lowercase()
 val osArch = System.getProperty("os.arch").lowercase()

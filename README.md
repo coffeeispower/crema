@@ -30,8 +30,9 @@ release notes.
 - **Extend it in Kotlin or Java.** No C, no C++, no FFI ceremony for your ideas.
   The compositor exposes a plugin API, so your status bar, your animations,
   your window rules, your window tiling strategies are just jar files in a plugins folder.
-- **Vulkan rendering.** Unlike most popular compositors which use OpenGL, jayland is built for optimal usage 
+- **Vulkan rendering.** Unlike most popular compositors which use OpenGL, Jayland is built for optimal usage 
   of your GPU for advanced effects and non-blocking rendering.
+- **Multi GPU Support from the get-go**: Jayland doesn't try to hide the complexity of the user's machine topology, it uses all GPUs on the machine, manages them and uses them to render to each monitor efficiently.
 
 ## Running it
 
@@ -95,6 +96,20 @@ The whole point is that this thing is yours.
   (or worse). Nested mode is your friend.
 - This is a proof of concept with a healthy appetite for `TODO()`.
 - You have been warned. Rice responsibly.
+
+## Performance
+
+JVM has an historical bad reputation for being a memory hog and slow, but that reputation comes from old java versions like Java 7 and 8.
+But those performance problems have been solved in newer versions:
+
+- Newer java versions ship better garbage collection algorithms which are heap size independent and can run concurrently with sub millisecond pauses which is a big improvement.
+- JIT compiles hot paths to machine code at runtime, making them run at speeds that resemble systems languages like Rust or C++.
+- Java is battle-tested in backend and server workloads for years now that have a lot of CPU-bound and IO-bound operations.
+
+Kotlin also provides good async support with coroutines, which were integrated into jayland for non-blocking VSync support and structured concurrency,
+so jayland doesn't need to spawn OS threads for each monitor, the kotlin runtime manages wait points instead of doing like most C and C++ compositors
+that use a manual error-prone harder-to-reason-about event-loop.
+
 
 ## Development
 

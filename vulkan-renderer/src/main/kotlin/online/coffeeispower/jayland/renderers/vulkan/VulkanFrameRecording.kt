@@ -1,9 +1,11 @@
 package online.coffeeispower.jayland.renderers.vulkan
 
-import online.coffeeispower.jayland.core.Color
-import online.coffeeispower.jayland.core.FrameRecording
-import online.coffeeispower.jayland.core.GPU
-import online.coffeeispower.jayland.core.GPUScanoutBuffer
+import online.coffeeispower.jayland.core.graphics.Color
+import online.coffeeispower.jayland.core.graphics.Rectangle
+import online.coffeeispower.jayland.core.graphics.RoundedRectangle
+import online.coffeeispower.jayland.core.graphics.renderer.FrameRecording
+import online.coffeeispower.jayland.core.graphics.gpu.GPU
+import online.coffeeispower.jayland.core.platform.linux.GPUScanoutBuffer
 import online.coffeeispower.jayland.lwjgl.memStack
 import org.lwjgl.vulkan.VK10.*
 import org.lwjgl.vulkan.VkClearColorValue
@@ -67,5 +69,26 @@ internal class VulkanFrameRecording(
                 range,
             )
         }
+    }
+
+    override fun drawRect(
+        rect: Rectangle,
+        fillColor: Color
+    ) {
+        TODO("Not yet implemented")
+    }
+
+    override fun drawRect(
+        rect: RoundedRectangle,
+        fillColor: Color
+    ) {
+        TODO("Not yet implemented")
+    }
+
+    override fun drawRectBorder(
+        rect: RoundedRectangle,
+        fillColor: Color
+    ) {
+        TODO("Not yet implemented")
     }
 }
