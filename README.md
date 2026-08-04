@@ -3,20 +3,20 @@
 > The extensible JVM-based Wayland compositor.
 
 ```
-                                                                              
-      _____        _____        ______        ______  _______         _____   
-  ___|\    \   ___|\    \   ___|\     \      |      \/       \    ___|\    \  
- /    /\    \ |    |\    \ |     \     \    /          /\     \  /    /\    \ 
-|    |  |    ||    | |    ||     ,_____/|  /     /\   / /\     ||    |  |    |
-|    |  |____||    |/____/ |     \--'\_|/ /     /\ \_/ / /    /||    |__|    |
-|    |   ____ |    |\    \ |     /___/|  |     |  \|_|/ /    / ||    .--.    |
-|    |  |    ||    | |    ||     \____|\ |     |       |    |  ||    |  |    |
-|\ ___\/    /||____| |____||____ '     /||\____\       |____|  /|____|  |____|
-| |   /____/ ||    | |    ||    /_____/ || |    |      |    | / |    |  |    |
- \|___|    | /|____| |____||____|     | / \|____|      |____|/  |____|  |____|
-   \( |____|/   \(     )/    \( |_____|/     \(          )/       \(      )/  
-    '   )/       '     '      '    )/         '          '         '      '   
-        '                          '                                          
+                                                                                         
+                 _____        _____        ______        ______  _______         _____   
+             ___|\    \   ___|\    \   ___|\     \      |      \/       \    ___|\    \  
+            /    /\    \ |    |\    \ |     \     \    /          /\     \  /    /\    \ 
+           |    |  |    ||    | |    ||     ,_____/|  /     /\   / /\     ||    |  |    |
+           |    |  |____||    |/____/ |     \--'\_|/ /     /\ \_/ / /    /||    |__|    |
+           |    |   ____ |    |\    \ |     /___/|  |     |  \|_|/ /    / ||    .--.    |
+           |    |  |    ||    | |    ||     \____|\ |     |       |    |  ||    |  |    |
+           |\ ___\/    /||____| |____||____ '     /||\____\       |____|  /|____|  |____|
+           | |   /____/ ||    | |    ||    /_____/ || |    |      |    | / |    |  |    |
+            \|___|    | /|____| |____||____|     | / \|____|      |____|/  |____|  |____|
+              \( |____|/   \(     )/    \( |_____|/     \(          )/       \(      )/  
+               '   )/       '     '      '    )/         '          '         '      '   
+                   '                          '                                          
 ```
 
 crema is a Wayland compositor that runs on the JVM and renders with Vulkan.
@@ -25,7 +25,7 @@ Your compositor, config and plugins can be written in a language you actually
 enjoy writing instead of debugging segfaults and link errors.
 
 **Status: early days.** crema is under heavy construction. It boots, it
-enumerates hardware, and it renders — but it isn't your daily driver yet.
+enumerates hardware, and it renders, but it isn't your daily driver yet.
 Everything below is the target experience; treat it as the roadmap, not the
 release notes.
 
@@ -33,21 +33,26 @@ release notes.
 
 - **It's a real Wayland compositor on the JVM.** No emulation, no wrapper
   scripts, no "technically a window manager that draws over everything."
-  Native GPU rendering through Vulkan, composited and committed the proper way.
+  It does actual native GPU rendering through platform-agnostic abstractions made
+  to run everywhere from a normal linux distro to a fridge, composited and
+  committed the proper way.
 - **Extend it in Kotlin or Java.** No C, no C++, no FFI ceremony for your ideas.
-  The compositor exposes a plugin API, so your status bar, your animations,
-  your window rules, your window tiling strategies are just jar files in a plugins folder.
-- **Vulkan rendering.** Unlike most popular compositors which use OpenGL, Crema is built for optimal usage 
-  of your GPU for advanced effects and non-blocking rendering. So you can get that 2k LoC liquid glass shader
-  running smoothly.
-- **Multi GPU Support from the get-go**: Crema doesn't try to hide the complexity of the user's machine topology, it uses all GPUs on the machine to render to each monitor efficiently.
+  The compositor exposes a plugin API, so your status bar, your custom animations,
+  your window rules, your window tiling strategies are just jar files in a plugins folder instead of Lua scripts and config files with poor DX.
+- **Vulkan rendering.** Unlike [popular compositors which use OpenGL](https://github.com/hyprwm/Hyprland/issues/1396),
+  Crema is built for optimal usage of your GPU for advanced effects and
+  non-blocking rendering. So you can get that 2k LoC liquid glass shader running
+  smoothly.
+- **Multi GPU support from the get-go.** Crema doesn't shy away from the
+  complexity of the user's machine topology, it embraces it. It uses all GPUs on
+  the machine to render to each monitor efficiently.
 
 ## Structure
 
 | Folder               | What it does                                                                                                   | Status  |
 |----------------------|:---------------------------------------------------------------------------------------------------------------|:-------:|
 | app                  | Contains the compositor application logic built on top of core and its implementations                         |   WIP   |
-| core                 | Platform agnostic abstractions for rendering and commiting to the screen in Java WORA style                    |   WIP   |
+| core                 | Platform agnostic abstractions for rendering and committing to the screen in Java WORA style                   |   WIP   |
 | blit-targets-drm     | Implements DRM as a BlitTarget to be used with core                                                            |  done   |
 | blit-targets-wayland | Emulates a monitor as a wayland window, allowing the compositor to be ran in nested mode                       | planned |
 | blit-targets-win32   | Similar to wayland but for running on windows (Out of scope for the MVP, but it will be done as an experiment) | planned |
@@ -73,19 +78,12 @@ release notes.
 ./gradlew build
 ```
 
-To run it interactively, use `scripts/run` (builds and launches the app
+To run it interactively, use `./gradlew run` (builds and launches the app
 directly):
 
 ```sh
-scripts/run
+./gradlew run
 ```
-
-Use this instead of `./gradlew run`: Gradle forks the app JVM into its own
-process group, so Ctrl+C (SIGINT to the terminal's foreground group) never
-reaches the compositor and its shutdown hook can't run — the screen stays
-captured. Launching the start script directly keeps the JVM in the
-foreground group, so Ctrl+C tears the display down cleanly and returns you
-to the console.
 
 ### Presentation modes
 
@@ -106,10 +104,11 @@ running underneath.
 The whole point is that this thing is yours.
 
 - **Plugins**: the compositor exposes a plugin API for Kotlin and Java. Window
-  management rules, effects, bars, overlays — write them once, ship them as
-  libraries, drop them in.
-- **Config**: user-facing configuration is coming. The goal is config that
-  reads like a dotfile, not a serialization test suite.
+  management rules, effects, bars, overlays, rendering backends, anything; write
+  them once, ship them as libraries, drop them in.
+- **Config**: user-facing configuration is coming. It will be inspired a bit by
+  minecraft server configurations, you have a main configuration file and then
+  each plugin may have its own.
 - **Everything is composable**: because the compositor is built from
   interchangeable pieces, swapping in your own behavior is a first-class
   operation rather than a fork-and-pray.
@@ -120,25 +119,28 @@ The whole point is that this thing is yours.
   display directly. If something goes wrong you'll be staring at a frozen TTY
   (or worse). Nested mode is your friend.
 - This is a proof of concept with a healthy appetite for `TODO()`.
+- I am a Vulkan beginner, and I'm using this project as an excuse to learn Vulkan.
 - You have been warned. Rice responsibly.
 
 ## Performance
 
-JVM has an historical bad reputation for being a memory hog and slow, but that reputation comes from old java versions like Java 7 and 8.
-But those performance problems have been solved in newer versions:
+The JVM's reputation for being a memory hog and slow dates back to old versions
+like Java 7 and 8. Newer versions have largely fixed that:
 
-- Newer java versions ship better garbage collection algorithms which are heap size independent and can run concurrently with sub millisecond pauses which is a big improvement.
-- JIT compiles hot paths to machine code at runtime, making them run at speeds that resemble systems languages like Rust or C++.
-- Java is battle-tested in backend and server workloads for years now that have a lot of CPU-bound and IO-bound operations.
+- Modern JVMs ship garbage collectors like Generational ZGC that are heap size
+  independent, run concurrently, and keep pause times consistently in the
+  sub-millisecond range.
+- The JIT compiles hot paths to machine code at runtime, closing most of the gap
+  to native code.
 
-Kotlin also provides good async support with coroutines, which were integrated into crema for non-blocking VSync support and structured concurrency,
-so crema doesn't need to spawn OS threads for each monitor, the kotlin runtime manages wait points instead of doing like most C and C++ compositors
-that use a manual error-prone harder-to-reason-about event-loop.
+Kotlin coroutines provide non-blocking VSync support with structured
+concurrency: instead of blocking one OS thread per monitor, the runtime
+suspends and resumes at wait points.
 
 
 ## Development
 
-- `scripts/run` — build and run (recommended for interactive use, see above)
+- `./gradlew run` — build and run
 - `./gradlew build` — build everything
 - `./gradlew check` — all checks and tests
 - `./gradlew clean` — clean build outputs
