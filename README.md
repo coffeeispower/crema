@@ -31,8 +31,26 @@ release notes.
   The compositor exposes a plugin API, so your status bar, your animations,
   your window rules, your window tiling strategies are just jar files in a plugins folder.
 - **Vulkan rendering.** Unlike most popular compositors which use OpenGL, Jayland is built for optimal usage 
-  of your GPU for advanced effects and non-blocking rendering.
-- **Multi GPU Support from the get-go**: Jayland doesn't try to hide the complexity of the user's machine topology, it uses all GPUs on the machine, manages them and uses them to render to each monitor efficiently.
+  of your GPU for advanced effects and non-blocking rendering. So you can get that 2k LoC liquid glass shader
+  running smoothly.
+- **Multi GPU Support from the get-go**: Jayland doesn't try to hide the complexity of the user's machine topology, it uses all GPUs on the machine to render to each monitor efficiently.
+
+## Structure
+
+| Folder               | What it does                                                                                                   | Status  |
+|----------------------|:---------------------------------------------------------------------------------------------------------------|:-------:|
+| app                  | Contains the compositor application logic built on top of core and its implementations                         |   WIP   |
+| core                 | Platform agnostic abstractions for rendering and commiting to the screen in Java WORA style                    |   WIP   |
+| blit-targets-drm     | Implements DRM as a BlitTarget to be used with core                                                            |  done   |
+| blit-targets-wayland | Emulates a monitor as a wayland window, allowing the compositor to be ran in nested mode                       | planned |
+| blit-targets-win32   | Similar to wayland but for running on windows (Out of scope for the MVP, but it will be done as an experiment) | planned |
+| buildSrc             | Helpers for gradle build scripts                                                                               |   N/A   |
+| drm-sys              | Auto generated libdrm bindings using jextract integrated into gradle                                           |  done   |
+| utils                | Utility functions and classes used across all packages                                                         |  done   |
+| lwjgl-utils          | Kotlin helpers for lwjgl                                                                                       |  done   |
+| vulkan-renderer      | Renderer implementation using Vulkan                                                                           |   WIP   |
+| plugin-manager       | Plugin manager and loader                                                                                      | planned |
+
 
 ## Running it
 
