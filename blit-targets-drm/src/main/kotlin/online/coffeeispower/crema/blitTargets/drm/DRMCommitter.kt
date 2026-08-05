@@ -5,8 +5,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import online.coffeeispower.crema.core.graphics.presentation.Committer
 import online.coffeeispower.crema.core.graphics.presentation.Frame
 import online.coffeeispower.crema.core.graphics.presentation.FrameResult
-import online.coffeeispower.crema.core.platform.linux.GPUScanoutBuffer
-import online.coffeeispower.crema.core.platform.linux.DrmScanoutBuffer
+import online.coffeeispower.crema.core.platform.linux.GPUScanoutImageBuffer
+import online.coffeeispower.crema.core.platform.linux.DrmScanoutImageBuffer
 import online.coffeeispower.crema.drm.sys.DrmFormats
 import online.coffeeispower.crema.drm.sys.Xf86Drm
 import online.coffeeispower.crema.utils.fds.Posix
@@ -56,14 +56,14 @@ class DRMCommitter internal constructor(
     private val inFlight = AtomicReference<FlipState?>()
 
     /** The buffer the kernel was scanning out before the last completed flip. Reactor-thread-only. */
-    private var lastDisplayed: GPUScanoutBuffer? = null
+    private var lastDisplayed: GPUScanoutImageBuffer? = null
 
     private var frameSeq = 0L
     private var currentFbId = 0
     private var closed = false
 
     override suspend fun commit(frame: Frame): FrameResult {
-        require(frame.buffer is DrmScanoutBuffer) { "DRM can only present DrmScanoutBuffer frames" }
+        require(frame.buffer is DrmScanoutImageBuffer) { "DRM can only present DrmScanoutBuffer frames" }
         val seq = ++frameSeq
         val state = FlipState(CompletableDeferred(), seq, frame.buffer)
         if (!inFlight.compareAndSet(null, state)) {
@@ -88,7 +88,7 @@ class DRMCommitter internal constructor(
     }
 
     private fun present(frame: Frame, seq: Long) {
-        val buffer = frame.buffer as DrmScanoutBuffer
+        val buffer = frame.buffer as DrmScanoutImageBuffer
         val dmaBufFd = buffer.exportDmaBufFd()
         var fbId = 0
         try {
@@ -130,7 +130,7 @@ class DRMCommitter internal constructor(
         return handle
     }
 
-    private fun addFramebuffer(buffer: DrmScanoutBuffer, handle: Int): Int {
+    private fun addFramebuffer(buffer: DrmScanoutImageBuffer, handle: Int): Int {
         return Arena.ofConfined().use { arena ->
             val handles = arena.allocate(ValueLayout.JAVA_INT, 4L)
             val pitches = arena.allocate(ValueLayout.JAVA_INT, 4L)
@@ -236,13 +236,13 @@ class DRMCommitter internal constructor(
     private class FlipState(
         val deferred: CompletableDeferred<FrameResult>,
         val seq: Long,
-        val buffer: GPUScanoutBuffer,
+        val buffer: GPUScanoutImageBuffer,
     )
 
     override fun close() {
         if (closed) return
         closed = true
-        eventLoop.unregister(this, userData)
+        eventLoop.unregister(userData)
         if (currentFbId != 0) {
             Xf86Drm.drmModeRmFB(fd, currentFbId)
             currentFbId = 0

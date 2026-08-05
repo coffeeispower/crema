@@ -18,7 +18,8 @@ import online.coffeeispower.crema.core.graphics.presentation.Frame
 import online.coffeeispower.crema.core.graphics.renderer.FrameRecording
 import online.coffeeispower.crema.core.graphics.presentation.FrameResult
 import online.coffeeispower.crema.core.graphics.gpu.GPU
-import online.coffeeispower.crema.core.platform.linux.GPUScanoutBuffer
+import online.coffeeispower.crema.core.graphics.gpu.GPUImageBuffer
+import online.coffeeispower.crema.core.platform.linux.GPUScanoutImageBuffer
 import online.coffeeispower.crema.core.input.InputManager
 import online.coffeeispower.crema.core.monitors.Mode
 import online.coffeeispower.crema.core.monitors.Monitor
@@ -29,6 +30,7 @@ import online.coffeeispower.crema.core.synchronization.Latch
 import online.coffeeispower.crema.core.graphics.gpu.Submission
 import online.coffeeispower.crema.core.graphics.presentation.Swapchain
 import online.coffeeispower.crema.core.graphics.gpu.VRam
+import online.coffeeispower.crema.core.units.ScaleFactor
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -36,6 +38,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.time.Duration.Companion.milliseconds
 
 class CompositorSessionTest {
 
@@ -79,7 +82,7 @@ class CompositorSessionTest {
 
         val session = CompositorSession(backend) {
             frames.incrementAndGet()
-            delay(5)
+            delay(5.milliseconds)
         }
         val runThread = Thread { session.run() }.apply { start() }
 
@@ -165,7 +168,7 @@ private class FakeRenderer : Renderer() {
         override fun close() = Unit
     }
 
-    override fun beginFrame(buffer: GPUScanoutBuffer, block: FrameRecording.() -> Unit): Submission =
+    override fun beginFrame(buffer: GPUImageBuffer, block: FrameRecording.() -> Unit): Submission =
         FakeSubmission()
 
     override fun close() = deviceManager.close()
@@ -192,11 +195,11 @@ private class FakeVRam : VRam {
         height: Int,
         colorMode: ColorMode,
         allowedModifiers: List<Long>?,
-    ): GPUScanoutBuffer = FakeBuffer()
+    ): GPUScanoutImageBuffer = FakeImageBuffer()
     override fun close() = Unit
 }
 
-private class FakeBuffer : GPUScanoutBuffer {
+private class FakeImageBuffer : GPUScanoutImageBuffer {
     override val width = 0
     override val height = 0
     override val colorMode = ColorMode.RGBA8
@@ -218,6 +221,7 @@ private class FakeOutput(private val committerOverride: Committer? = null) : Out
         private set
     override val monitor = Monitor("test-monitor", 1920, 1080, 60)
     override val mode = Mode(1920, 1080, 60)
+    override val scaleFactor = ScaleFactor.ONE
     override val swapchain: Swapchain = Swapchain(1920, 1080, ColorMode.RGBA8, vram = FakeVRam())
     override val committer: Committer = committerOverride ?: FakeCommitter()
     val closeCount = AtomicInteger(0)

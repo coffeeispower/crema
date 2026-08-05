@@ -8,7 +8,9 @@ import online.coffeeispower.crema.blitTargets.wayland.*;
 import online.coffeeispower.crema.utils.errors.*
 import online.coffeeispower.crema.utils.logging.LogArchiver
 import kotlinx.coroutines.CoroutineScope
+import online.coffeeispower.crema.core.graphics.Border
 import online.coffeeispower.crema.core.graphics.Color
+import online.coffeeispower.crema.core.graphics.Rectangle
 import online.coffeeispower.crema.core.graphics.presentation.Frame
 import online.coffeeispower.crema.core.monitors.Output
 import online.coffeeispower.crema.core.graphics.renderer.Renderer
@@ -104,7 +106,13 @@ fun main() {
         )
     }.run()
 }
-
+data object TestRectangle {
+    val animationStartNanos = System.nanoTime()
+    val rectangle = Rectangle(100f, 100f, 1920f*0.2f, 1200f*0.2f)
+    val roundedRectangle = rectangle.toRounded(40f)
+    val fillColor = Color.WHITE
+    val border = Border(Color.GREEN, 3f)
+}
 /**
  * Produces one frame for [output]: acquire a buffer from its swapchain, record
  * and dispatch the frame's commands into it, then commit it to the screen.
@@ -114,7 +122,23 @@ fun main() {
 private suspend fun CoroutineScope.renderFrame(renderer: Renderer, output: Output) {
     val buffer = output.swapchain.acquireBuffer();
     val submission = renderer.beginFrame(buffer) {
-        clear(Color.RED);
+        clear(Color.BLACK);
+        // Oscillate the test rectangle so we can see the output is live.
+        val t = (System.nanoTime() - TestRectangle.animationStartNanos) / 1e9;
+        val base = TestRectangle.rectangle;
+        val maxX = (output.logicalSize.width - base.width).toFloat();
+        val maxY = (output.logicalSize.height - base.height).toFloat();
+        val rect = base.copy(
+            x = maxX * 0.5f * (1f + kotlin.math.sin(t.toFloat())),
+            y = maxY * 0.5f * (1f + kotlin.math.cos(t.toFloat())),
+            width = base.width * (1f + 0.2f * kotlin.math.sin(2f * t.toFloat())),
+            height = base.height * (1f + 0.2f * kotlin.math.cos(2f * t.toFloat())),
+        );
+        drawRect(
+            rect = rect.toRounded(40f),
+            fillColor = TestRectangle.fillColor,
+            border = TestRectangle.border,
+        )
     };
     try {
         output.committer.commit(Frame(buffer, submission));

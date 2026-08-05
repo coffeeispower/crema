@@ -60,6 +60,38 @@ class VulkanGPU(
         }
     }
 
+    /** The physical device's advertised Vulkan API version. */
+    private val apiVersion: Int by lazy {
+        memStack {
+            val properties = VkPhysicalDeviceProperties.calloc(this)
+            vkGetPhysicalDeviceProperties(physicalDevice, properties)
+            properties.apiVersion()
+        }
+    }
+
+    /** Whether the device supports core Vulkan 1.3 (dynamic rendering). */
+    internal val supportsVulkan13: Boolean by lazy { apiVersionAtLeast(1, 3) }
+
+    /**
+     * Whether the device's advertised [apiVersion] is at least [major].[minor].[patch].
+     */
+    private fun apiVersionAtLeast(major: Int, minor: Int, patch: Int = 0): Boolean {
+        val deviceMajor = VK_API_VERSION_MAJOR(apiVersion)
+        val deviceMinor = VK_API_VERSION_MINOR(apiVersion)
+        val devicePatch = VK_API_VERSION_PATCH(apiVersion)
+        return deviceMajor > major ||
+            deviceMajor == major && (deviceMinor > minor ||
+                deviceMinor == minor && devicePatch >= patch)
+    }
+
+    private val shapePipelineLock = Any()
+    private var shapePipeline: VulkanShapePipeline? = null
+
+    /** The solid-shape pipeline for this GPU, created lazily on first draw. */
+    internal fun shapePipeline(): VulkanShapePipeline = synchronized(shapePipelineLock) {
+        shapePipeline ?: VulkanShapePipeline(this).also { shapePipeline = it }
+    }
+
     override val vram: VRam = VulkanVRam(this)
 
     private val deviceExtensions: List<String> by lazy {
@@ -221,6 +253,14 @@ class VulkanGPU(
         }
         vram.close()
         if (lazyDevice.isInitialized()) {
+            // Device-bound resources must go before the device itself: the shape
+            // pipeline (modules/layout/pipelines) then the logical device. The
+            // pipeline is only ever created once the device exists, so a lazy
+            // (never-drawn) GPU has nothing to tear down here.
+            synchronized(shapePipelineLock) {
+                shapePipeline?.close()
+                shapePipeline = null
+            }
             logger.debug { "Destroying logical device for $name" }
             vkDestroyDevice(lazyDevice.value, null)
         }
@@ -233,10 +273,20 @@ class VulkanGPU(
                 .`sType$Default`()
                 .queueFamilyIndex(queueFamilyIndex)
                 .pQueuePriorities(floats(1f))
+            // Dynamic rendering (used by the shape pipeline) is a core Vulkan 1.3
+            // feature that must be opted into at device creation; the instance is
+            // created against 1.3, and non-1.3 devices fail in the pipeline with a
+            // clear error instead of relying on unspecified behavior.
+            val vulkan13Features = if (supportsVulkan13) {
+                VkPhysicalDeviceVulkan13Features.calloc(this)
+                    .`sType$Default`()
+                    .dynamicRendering(true)
+            } else null
             val deviceCreateInfo = VkDeviceCreateInfo.calloc(this)
                 .`sType$Default`()
                 .pQueueCreateInfos(queueCreateInfos)
                 .ppEnabledExtensionNames(CStr.array(this, requestedExtensions))
+                .pNext(vulkan13Features?.address() ?: 0L)
             val handle = outPointer { buf ->
                 vkCreateDevice(physicalDevice, deviceCreateInfo, null, buf)
                     .checkAsVkError("create logical device for $name")

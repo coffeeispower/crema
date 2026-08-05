@@ -1,6 +1,6 @@
 import io.github.oshai.kotlinlogging.KotlinLogging
 import online.coffeeispower.crema.core.graphics.Color
-import online.coffeeispower.crema.core.platform.linux.DrmScanoutBuffer
+import online.coffeeispower.crema.core.platform.linux.DrmScanoutImageBuffer
 import online.coffeeispower.crema.drm.sys.DrmFormats
 import online.coffeeispower.crema.drm.sys.Xf86Drm
 import online.coffeeispower.crema.renderers.vulkan.VulkanRenderer
@@ -56,7 +56,7 @@ class AddFbProbeTest {
                 val vram = renderer.deviceManager.gpus[0].vram
                 val sizes = listOf(64 to 64, 1920 to 1200, 640 to 400)
                 for ((w, h) in sizes) {
-                    val buffer = vram.allocateBufferForScanout(w, h) as DrmScanoutBuffer
+                    val buffer = vram.allocateBufferForScanout(w, h) as DrmScanoutImageBuffer
                     val submission = renderer.beginFrame(buffer) { clear(Color.RED) }
                     val fence = submission.exportInFenceFd()
                     runBlocking {
@@ -107,7 +107,7 @@ class AddFbProbeTest {
                     listOf(swapchain.acquireBuffer(), swapchain.acquireBuffer())
                 }
                 for (b in bufs) {
-                    val db = b as DrmScanoutBuffer
+                    val db = b as DrmScanoutImageBuffer
                     val dmaBuf2 = db.exportDmaBufFd()
                     val h = Arena.ofConfined().use { a ->
                         val p = a.allocate(ValueLayout.JAVA_INT)

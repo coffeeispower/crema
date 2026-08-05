@@ -1,10 +1,11 @@
 package online.coffeeispower.crema.core.graphics.renderer
 
+import online.coffeeispower.crema.core.graphics.Border
 import online.coffeeispower.crema.core.graphics.Color
 import online.coffeeispower.crema.core.graphics.Rectangle
 import online.coffeeispower.crema.core.graphics.RoundedRectangle
 import online.coffeeispower.crema.core.graphics.gpu.GPU
-import online.coffeeispower.crema.core.platform.linux.GPUScanoutBuffer
+import online.coffeeispower.crema.core.graphics.gpu.GPUImageBuffer
 
 /**
  * The commands queued into a single frame recorded for a [buffer].
@@ -15,8 +16,8 @@ import online.coffeeispower.crema.core.platform.linux.GPUScanoutBuffer
  * responsible for the Vulkan-level lifecycle (begin/end/submit) around it.
  */
 interface FrameRecording {
-    /** The scanout buffer this frame renders into. */
-    val buffer: GPUScanoutBuffer
+    /** The image buffer this frame renders into. */
+    val buffer: GPUImageBuffer
 
     /** The GPU the recorded work is submitted to. */
     val gpu: GPU
@@ -26,5 +27,8 @@ interface FrameRecording {
 
     fun drawRect(rect: Rectangle, fillColor: Color);
     fun drawRect(rect: RoundedRectangle, fillColor: Color);
-    fun drawRectBorder(rect: RoundedRectangle, fillColor: Color);
+    fun drawRect(rect: Rectangle, fillColor: Color, border: Border) = drawRect(rect, fillColor).also { drawRectBorder(rect, border) }
+    fun drawRect(rect: RoundedRectangle, fillColor: Color, border: Border) = drawRect(rect, fillColor).also { drawRectBorder(rect, border) }
+    fun drawRectBorder(rect: Rectangle, border: Border);
+    fun drawRectBorder(rect: RoundedRectangle, border: Border);
 }

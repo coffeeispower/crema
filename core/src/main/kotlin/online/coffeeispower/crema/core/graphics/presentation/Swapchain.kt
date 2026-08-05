@@ -2,11 +2,11 @@ package online.coffeeispower.crema.core.graphics.presentation
 
 import kotlinx.coroutines.sync.Semaphore
 import online.coffeeispower.crema.core.graphics.ColorMode
-import online.coffeeispower.crema.core.platform.linux.GPUScanoutBuffer
+import online.coffeeispower.crema.core.platform.linux.GPUScanoutImageBuffer
 import online.coffeeispower.crema.core.graphics.gpu.VRam
 
 /**
- * A rotating pool of [GPUScanoutBuffer]s used for presentation. [acquireBuffer]
+ * A rotating pool of [GPUScanoutImageBuffer]s used for presentation. [acquireBuffer]
  * hands out a free buffer and suspends while every buffer in the pool is still
  * in flight, so the pool depth is the maximum number of frames that can be
  * presented concurrently.
@@ -37,13 +37,13 @@ class Swapchain(
     }
 
     private val buffers = List(depth) { vram.allocateBufferForScanout(width, height, colorMode, allowedModifiers) }
-    private val free = ArrayDeque<GPUScanoutBuffer>().apply { addAll(buffers) }
+    private val free = ArrayDeque<GPUScanoutImageBuffer>().apply { addAll(buffers) }
     private val freeSlots = Semaphore(depth)
     private val lock = Any()
     private var closed = false
 
     /** Returns the next free buffer, suspending until one is available. */
-    suspend fun acquireBuffer(): GPUScanoutBuffer {
+    suspend fun acquireBuffer(): GPUScanoutImageBuffer {
         freeSlots.acquire()
         synchronized(lock) {
             return free.removeFirst()
@@ -51,7 +51,7 @@ class Swapchain(
     }
 
     /** Returns [buffer] to the pool once its scanout has completed. */
-    fun release(buffer: GPUScanoutBuffer) {
+    fun release(buffer: GPUScanoutImageBuffer) {
         check(buffer in buffers) { "Cannot release a buffer this swapchain does not own" }
         synchronized(lock) {
             free.addLast(buffer)

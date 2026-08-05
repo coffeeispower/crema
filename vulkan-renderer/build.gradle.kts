@@ -6,6 +6,8 @@ plugins {
     id("buildsrc.convention.logging")
     // Include LWJGL (vulkan bindings + joml + stb + glfw + harfbuzz)
     id("buildsrc.convention.lwjgl")
+    // Compile GLSL shaders (src/main/glsl) into SPIR-V resources at build time.
+    id("buildsrc.convention.spirv")
     // Apply Kotlin Serialization plugin from `gradle/libs.versions.toml`.
     alias(libs.plugins.kotlinPluginSerialization)
 }

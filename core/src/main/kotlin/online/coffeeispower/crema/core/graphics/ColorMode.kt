@@ -1,7 +1,7 @@
 package online.coffeeispower.crema.core.graphics
 
 /**
- * The pixel format of a [online.coffeeispower.crema.core.platform.linux.GPUScanoutBuffer]. Besides plain SDR (RGBA8), it covers the
+ * The pixel format of a [online.coffeeispower.crema.core.platform.linux.GPUScanoutImageBuffer]. Besides plain SDR (RGBA8), it covers the
  * wide-gamut and HDR formats a monitor may be driven with, e.g. RGB10A2 or
  * RGBA16F.
  */

@@ -1,7 +1,7 @@
 package online.coffeeispower.crema.core.graphics.gpu
 
 import online.coffeeispower.crema.core.graphics.ColorMode
-import online.coffeeispower.crema.core.platform.linux.GPUScanoutBuffer
+import online.coffeeispower.crema.core.platform.linux.GPUScanoutImageBuffer
 
 interface VRam : AutoCloseable {
     /**
@@ -18,5 +18,5 @@ interface VRam : AutoCloseable {
         height: Int,
         colorMode: ColorMode = ColorMode.RGBA8,
         allowedModifiers: List<Long>? = null,
-    ): GPUScanoutBuffer
+    ): GPUScanoutImageBuffer
 }

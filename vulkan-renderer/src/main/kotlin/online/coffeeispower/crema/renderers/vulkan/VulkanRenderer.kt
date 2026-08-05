@@ -1,7 +1,7 @@
 package online.coffeeispower.crema.renderers.vulkan
 
 import online.coffeeispower.crema.core.graphics.renderer.FrameRecording
-import online.coffeeispower.crema.core.platform.linux.GPUScanoutBuffer
+import online.coffeeispower.crema.core.graphics.gpu.GPUImageBuffer
 import online.coffeeispower.crema.core.graphics.renderer.Renderer
 import online.coffeeispower.crema.core.graphics.gpu.Submission
 import online.coffeeispower.crema.lwjgl.memStack
@@ -11,13 +11,14 @@ import online.coffeeispower.crema.utils.errors.UnsupportedPlatformException
 import online.coffeeispower.crema.utils.fds.PollDispatcher
 import org.lwjgl.vulkan.VK10.*
 import org.lwjgl.vulkan.VK11.VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT
+import org.lwjgl.vulkan.VK13.*
 import org.lwjgl.vulkan.*
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * A [Renderer] that records each frame as transfer commands and submits them to
- * a graphics queue, signalling completion through an exportable binary
- * semaphore per submission.
+ * A [Renderer] that records each frame as graphics commands (a dynamic-rendering
+ * pass against the scanout image) and submits them to a graphics queue,
+ * signalling completion through an exportable binary semaphore per submission.
  *
  * [beginFrame] owns the whole frame lifecycle for one scanout buffer: it resets
  * and begins the buffer's command buffer, runs the caller's block to queue
@@ -40,9 +41,9 @@ class VulkanRenderer : Renderer() {
     private val commandBuffers = ConcurrentHashMap<Long, VkCommandBuffer>()
     private var closed = false
 
-    override fun beginFrame(buffer: GPUScanoutBuffer, block: FrameRecording.() -> Unit): Submission {
+    override fun beginFrame(buffer: GPUImageBuffer, block: FrameRecording.() -> Unit): Submission {
         check(!closed) { "VulkanRenderer is closed" }
-        val vBuffer = buffer as VulkanGPUScanoutBuffer
+        val vBuffer = buffer as VulkanGPUImageBuffer
         val commandBuffer = commandBuffers.computeIfAbsent(vBuffer.vkImage) { commandBufferFor(vBuffer) }
         memStack {
             vkResetCommandBuffer(commandBuffer, 0).checkAsVkError("reset command buffer")
@@ -50,6 +51,8 @@ class VulkanRenderer : Renderer() {
                 commandBuffer,
                 VkCommandBufferBeginInfo.calloc(this).`sType$Default`(),
             ).checkAsVkError("begin command buffer")
+            transitionToColorAttachment(commandBuffer, vBuffer)
+            beginRendering(commandBuffer, vBuffer)
         }
         try {
             VulkanFrameRecording(vBuffer, commandBuffer).block()
@@ -64,9 +67,10 @@ class VulkanRenderer : Renderer() {
     }
 
     /** Ends the recording, submits it, and wraps the completion signal. */
-    private fun submitFrame(buffer: VulkanGPUScanoutBuffer, commandBuffer: VkCommandBuffer): Submission {
+    private fun submitFrame(buffer: VulkanGPUImageBuffer, commandBuffer: VkCommandBuffer): Submission {
         val gpu = buffer.owner
         memStack {
+            vkCmdEndRendering(commandBuffer)
             vkEndCommandBuffer(commandBuffer).checkAsVkError("end command buffer")
             val semaphore = createExportableSemaphore(gpu.device)
             try {
@@ -87,7 +91,74 @@ class VulkanRenderer : Renderer() {
     }
 
     //<editor-fold desc="Command buffer and semaphore boilerplate">
-    private fun commandBufferFor(buffer: VulkanGPUScanoutBuffer): VkCommandBuffer {
+    /** Transitions the scanout image into color-attachment state for rendering. */
+    private fun transitionToColorAttachment(commandBuffer: VkCommandBuffer, buffer: VulkanGPUImageBuffer) {
+        memStack {
+            val barriers = VkImageMemoryBarrier2.calloc(1, this)
+            barriers.get(0)
+                .`sType$Default`()
+                .srcStageMask(VK_PIPELINE_STAGE_2_NONE)
+                .srcAccessMask(0)
+                .dstStageMask(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT)
+                .dstAccessMask(VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT)
+                .oldLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                .newLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+                .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+                .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+                .image(buffer.vkImage)
+                .subresourceRange(
+                    VkImageSubresourceRange.calloc(this)
+                        .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                        .baseMipLevel(0)
+                        .levelCount(1)
+                        .baseArrayLayer(0)
+                        .layerCount(1),
+                )
+            val dependencyInfo = VkDependencyInfo.calloc(this)
+                .`sType$Default`()
+                .pImageMemoryBarriers(barriers)
+            vkCmdPipelineBarrier2(commandBuffer, dependencyInfo)
+        }
+    }
+
+    /**
+     * Opens a dynamic-rendering pass over the whole buffer and sets the dynamic
+     * viewport/scissor so the (per-format, not per-size) shape pipeline can be
+     * shared across buffers of different sizes.
+     */
+    private fun beginRendering(commandBuffer: VkCommandBuffer, buffer: VulkanGPUImageBuffer) {
+        memStack {
+            val attachments = VkRenderingAttachmentInfo.calloc(1, this)
+            attachments.get(0)
+                .`sType$Default`()
+                .imageView(buffer.vkImageView)
+                .imageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+                .loadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
+                .storeOp(VK_ATTACHMENT_STORE_OP_STORE)
+            val renderingInfo = VkRenderingInfo.calloc(this)
+                .`sType$Default`()
+                .renderArea(
+                    VkRect2D.calloc(this)
+                        .extent(VkExtent2D.calloc(this).width(buffer.width).height(buffer.height)),
+                )
+                .layerCount(1)
+                .pColorAttachments(attachments)
+            vkCmdBeginRendering(commandBuffer, renderingInfo)
+            val viewports = VkViewport.calloc(1, this)
+            viewports.get(0)
+                .x(0f).y(0f)
+                .width(buffer.width.toFloat()).height(buffer.height.toFloat())
+                .minDepth(0f).maxDepth(1f)
+            val scissors = VkRect2D.calloc(1, this)
+            scissors.get(0)
+                .offset(VkOffset2D.calloc(this))
+                .extent(VkExtent2D.calloc(this).width(buffer.width).height(buffer.height))
+            vkCmdSetViewport(commandBuffer, 0, viewports)
+            vkCmdSetScissor(commandBuffer, 0, scissors)
+        }
+    }
+
+    private fun commandBufferFor(buffer: VulkanGPUImageBuffer): VkCommandBuffer {
         val pool = commandPools.computeIfAbsent(buffer.owner) { commandPoolFor(it) }
         return memStack {
             val handle = outPointer { buf ->

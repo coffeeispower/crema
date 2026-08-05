@@ -1,7 +1,7 @@
 package online.coffeeispower.crema.core.graphics.renderer
 
 import online.coffeeispower.crema.core.graphics.gpu.DeviceManager
-import online.coffeeispower.crema.core.platform.linux.GPUScanoutBuffer
+import online.coffeeispower.crema.core.graphics.gpu.GPUImageBuffer
 import online.coffeeispower.crema.core.graphics.gpu.Submission
 
 abstract class Renderer : AutoCloseable {
@@ -16,7 +16,7 @@ abstract class Renderer : AutoCloseable {
      * reusable: any partially recorded work is discarded before the exception
      * propagates.
      */
-    abstract fun beginFrame(buffer: GPUScanoutBuffer, block: FrameRecording.() -> Unit): Submission
+    abstract fun beginFrame(buffer: GPUImageBuffer, block: FrameRecording.() -> Unit): Submission
 
     override fun close() {
         deviceManager.close()

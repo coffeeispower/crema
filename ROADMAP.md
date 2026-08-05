@@ -23,7 +23,7 @@ Working assumptions baked in: client-side decorations for MVP (via
 ## Phase 2 — Renderer can composite (de-risk the pipeline before Wayland exists)
 
 - [ ] Minimal Vulkan graphics pipeline: render pass, framebuffer, pipeline layout, descriptor set, fullscreen quad buffers
-- [ ] Two precompiled GLSL→SPIR-V shaders (`.spv` committed)
+- [ ] GLSL→SPIR-V shaders compilation pipeline in gradle
 - [ ] Extend `FrameRecording` with a draw op: `draw(image, srcRect, dstRect)`
 - [ ] **Demo:** hardcoded generated texture on screen instead of clear-red
 

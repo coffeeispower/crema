@@ -2,9 +2,10 @@ package online.coffeeispower.crema.renderers.vulkan
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import online.coffeeispower.crema.core.graphics.ColorMode
-import online.coffeeispower.crema.core.platform.linux.GPUScanoutBuffer
+import online.coffeeispower.crema.core.platform.linux.GPUScanoutImageBuffer
+import online.coffeeispower.crema.core.graphics.gpu.GPUImageBuffer
 import online.coffeeispower.crema.core.graphics.gpu.VRam
-import online.coffeeispower.crema.core.platform.linux.DrmScanoutBuffer
+import online.coffeeispower.crema.core.platform.linux.DrmScanoutImageBuffer
 import online.coffeeispower.crema.drm.sys.DrmFormats
 import online.coffeeispower.crema.drm.sys.drmFourcc
 import online.coffeeispower.crema.lwjgl.memStack
@@ -26,7 +27,7 @@ import org.lwjgl.vulkan.*
  */
 data class ScanoutTiling(val vkImageTiling: Int, val drmModifier: Long)
 
-private val SCANOUT_USAGE =
+private const val SCANOUT_USAGE =
     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT or
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT or
         VK_IMAGE_USAGE_TRANSFER_DST_BIT or
@@ -35,14 +36,14 @@ private val SCANOUT_USAGE =
 class VulkanVRam(private val gpu: VulkanGPU) : VRam {
 
     private val logger = KotlinLogging.logger {}
-    private val buffers = java.util.Collections.synchronizedList(mutableListOf<VulkanGPUScanoutBuffer>())
+    private val buffers = java.util.Collections.synchronizedList(mutableListOf<VulkanGPUScanoutImageBuffer>())
 
     override fun allocateBufferForScanout(
         width: Int,
         height: Int,
         colorMode: ColorMode,
         allowedModifiers: List<Long>?,
-    ): GPUScanoutBuffer {
+    ): GPUScanoutImageBuffer {
         val device = gpu.device
         val vkFormat = colorMode.vkFormat
         return memStack {
@@ -54,7 +55,7 @@ class VulkanVRam(private val gpu: VulkanGPU) : VRam {
                 val pitch = if (tiling.drmModifier == DrmFormats.MOD_LINEAR) {
                     alignedPitch(width, colorMode.bitsPerPixel / 8, 64)
                 } else {
-                    scanoutPitch(tiling.drmModifier, width, colorMode.bitsPerPixel / 8)
+                    scanoutPitch(width, colorMode.bitsPerPixel / 8)
                 }
                 externalInfo.pNext(
                     VkImageDrmFormatModifierExplicitCreateInfoEXT.calloc(this)
@@ -107,8 +108,25 @@ class VulkanVRam(private val gpu: VulkanGPU) : VRam {
                     .checkAsVkError("allocate image memory ${width}x$height")
             }
             vkBindImageMemory(device, image, memory, 0).checkAsVkError("bind image memory")
-            VulkanGPUScanoutBuffer(
-                width, height, colorMode, gpu, device, image, memory,
+            val view = outLong { buf ->
+                val createInfo = VkImageViewCreateInfo.calloc(this)
+                    .`sType$Default`()
+                    .image(image)
+                    .viewType(VK_IMAGE_VIEW_TYPE_2D)
+                    .format(vkFormat)
+                    .subresourceRange(
+                        VkImageSubresourceRange.calloc(this)
+                            .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                            .baseMipLevel(0)
+                            .levelCount(1)
+                            .baseArrayLayer(0)
+                            .layerCount(1),
+                    )
+                vkCreateImageView(device, createInfo, null, buf)
+                    .checkAsVkError("create image view ${width}x$height")
+            }
+            VulkanGPUScanoutImageBuffer(
+                width, height, colorMode, gpu, device, image, view, memory,
                 colorMode.drmFourcc, tiling.drmModifier,
                 tiling.vkImageTiling == EXTImageDrmFormatModifier.VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
                 if (stride > 0) stride else linearRowPitch(device, image),
@@ -152,15 +170,8 @@ class VulkanVRam(private val gpu: VulkanGPU) : VRam {
  * vendors get the conservative 512B tile-row alignment — the driver validates
  * the layout at `vkCreateImage` time and rejects an invalid pitch.
  */
-private fun scanoutPitch(modifier: Long, width: Int, bytesPerPixel: Int): Int {
-    val alignment = if (modifier shr 56 == DrmFormats.MOD_VENDOR_INTEL) {
-        when ((modifier and 0xffff).toInt()) {
-            DrmFormats.I915_Y_TILED, DrmFormats.I915_YF_TILED -> 128
-            else -> 512
-        }
-    } else {
-        512
-    }
+private fun scanoutPitch(width: Int, bytesPerPixel: Int): Int {
+    val alignment = 512
     return alignedPitch(width, bytesPerPixel, alignment)
 }
 
@@ -188,7 +199,7 @@ private fun pickMemoryType(memoryProperties: VkPhysicalDeviceMemoryProperties, m
     error("No suitable memory type available")
 }
 
-private val ColorMode.vkFormat: Int
+internal val ColorMode.vkFormat: Int
     get() = when (this) {
         // XRGB8888 stores bytes as [B, G, R, X], so scanout buffers must be
         // B8G8R8A8 (NOT R8G8B8A8, which would swap red and blue on the wire).
@@ -198,23 +209,57 @@ private val ColorMode.vkFormat: Int
         ColorMode.RGBA32F -> VK_FORMAT_R32G32B32A32_SFLOAT
     }
 
-class VulkanGPUScanoutBuffer(
+/**
+ * A [GPUImageBuffer] backed by a `VkImage`: a 2D texture with an image view
+ * and backing memory, used as a rendering target. Textures that are also
+ * presented to the screen are [VulkanGPUScanoutImageBuffer].
+ */
+sealed class VulkanGPUImageBuffer(
     override val width: Int,
     override val height: Int,
     override val colorMode: ColorMode,
     override val owner: VulkanGPU,
-    private val device: VkDevice,
+    protected val device: VkDevice,
     private val image: Long,
-    private val memory: Long,
+    private val imageView: Long,
+    protected val memory: Long,
+) : GPUImageBuffer {
+
+    internal val vkImage: Long get() = image
+    internal val vkImageView: Long get() = imageView
+    internal val vkFormat: Int get() = colorMode.vkFormat
+
+    protected var closed = false
+
+    override fun close() {
+        if (closed) return
+        closed = true
+        vkDestroyImageView(device, imageView, null)
+        vkDestroyImage(device, image, null)
+        vkFreeMemory(device, memory, null)
+    }
+}
+
+/**
+ * A [VulkanGPUImageBuffer] whose backing memory can be exported as a DMA-BUF
+ * and presented through KMS, exposing the format, tiling modifier, stride and
+ * export fd the kernel needs to build a scanout framebuffer.
+ */
+class VulkanGPUScanoutImageBuffer(
+    width: Int,
+    height: Int,
+    colorMode: ColorMode,
+    owner: VulkanGPU,
+    device: VkDevice,
+    image: Long,
+    imageView: Long,
+    memory: Long,
     override val drmFormat: Int,
     override val drmModifier: Long,
     override val usesExplicitModifier: Boolean,
     override val stride: Int,
-) : DrmScanoutBuffer {
-
-    internal val vkImage: Long get() = image
-
-    private var closed = false
+) : VulkanGPUImageBuffer(width, height, colorMode, owner, device, image, imageView, memory),
+    DrmScanoutImageBuffer {
 
     override fun exportDmaBufFd(): Int = memStack {
         outInt { buf ->
@@ -227,12 +272,5 @@ class VulkanGPUScanoutBuffer(
                 buf,
             ).checkAsVkError("export dma-buf fd")
         }
-    }
-
-    override fun close() {
-        if (closed) return
-        closed = true
-        vkDestroyImage(device, image, null)
-        vkFreeMemory(device, memory, null)
     }
 }

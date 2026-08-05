@@ -1,13 +1,13 @@
 package online.coffeeispower.crema.core.platform.linux
 
 /**
- * A [GPUScanoutBuffer] whose backing memory can be imported into the DRM/KMS
+ * A [GPUScanoutImageBuffer] whose backing memory can be imported into the DRM/KMS
  * stack, exposing the format, tiling modifier and DMA-BUF fd the kernel needs
  * to build a scanout framebuffer. Mirrors [online.coffeeispower.crema.core.platform.linux.DrmGPU]
- * by staying Linux-specific while the platform-agnostic [GPUScanoutBuffer]
+ * by staying Linux-specific while the platform-agnostic [GPUScanoutImageBuffer]
  * stays clean.
  */
-interface DrmScanoutBuffer : GPUScanoutBuffer {
+interface DrmScanoutImageBuffer : GPUScanoutImageBuffer {
     /** The `DRM_FORMAT_*` fourcc of the buffer (e.g. `DRM_FORMAT_XRGB8888`). */
     val drmFormat: Int
 

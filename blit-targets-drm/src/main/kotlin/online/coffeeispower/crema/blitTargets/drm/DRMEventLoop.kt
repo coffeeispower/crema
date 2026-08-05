@@ -60,7 +60,7 @@ class DRMEventLoop(
         return segment
     }
 
-    internal fun unregister(committer: DRMCommitter, userData: MemorySegment) {
+    internal fun unregister(userData: MemorySegment) {
         committers.remove(userData.address())
     }
 
@@ -96,8 +96,7 @@ class DRMEventLoop(
     }
 
     private fun drainEvents(fd: Int) {
-        val ret = Xf86Drm.drmHandleEvent(fd, eventContext)
-        when (ret) {
+        when (val ret = Xf86Drm.drmHandleEvent(fd, eventContext)) {
             0 -> {}
             // -1 is the benign EAGAIN race: a level-triggered epoll wakeup for
             // an event that was already drained (drmHandleEvent returns -1 on a

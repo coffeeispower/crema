@@ -5,6 +5,7 @@ import online.coffeeispower.crema.core.monitors.Mode
 import online.coffeeispower.crema.core.monitors.Monitor
 import online.coffeeispower.crema.core.monitors.Output
 import online.coffeeispower.crema.core.graphics.presentation.Swapchain
+import online.coffeeispower.crema.core.units.ScaleFactor
 import online.coffeeispower.crema.drm.sys.Xf86Drm
 import java.lang.foreign.MemorySegment
 
@@ -23,7 +24,7 @@ class DRMOutput(
     internal val connectorId: Int,
     internal val props: DrmProperties,
     internal val modeBlobId: Int,
-    private val eventLoop: DRMEventLoop,
+    eventLoop: DRMEventLoop,
 ) : Output {
 
     @Volatile
@@ -31,6 +32,9 @@ class DRMOutput(
         private set
 
     override val committer: Committer = DRMCommitter(this, eventLoop)
+
+    // No user-facing scale configuration exists yet, so outputs start at 1:1.
+    override val scaleFactor: ScaleFactor = ScaleFactor.ONE
 
     override fun close() {
         if (detached) return
