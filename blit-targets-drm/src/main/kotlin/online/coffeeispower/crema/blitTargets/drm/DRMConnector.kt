@@ -51,7 +51,7 @@ class DRMConnector(
         logger.debug {
             "Plane $planeId scanout modifiers for fourcc 0x${colorMode.drmFourcc.toString(16)}: $modifiers"
         }
-        val swapchain = Swapchain(mode.width, mode.height, colorMode, depth = 2, vram, allowedModifiers = modifiers)
+        val swapchain = Swapchain(mode.width, mode.height, colorMode, depth = 3, vram, allowedModifiers = modifiers)
         val props = DrmProperties.resolve(device.fd, planeId, crtcId, connectorId)
         val modeBlobId = createModeBlob(mode)
         logger.info {

@@ -1,7 +1,11 @@
 package online.coffeeispower.crema.blitTargets.drm
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import io.github.oshai.kotlinlogging.KotlinLogging
+import online.coffeeispower.crema.core.graphics.gpu.Submission
 import online.coffeeispower.crema.core.graphics.presentation.Committer
 import online.coffeeispower.crema.core.graphics.presentation.Frame
 import online.coffeeispower.crema.core.graphics.presentation.FrameResult
@@ -13,28 +17,45 @@ import online.coffeeispower.crema.utils.fds.Posix
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Presents frames with non-blocking atomic commits: each [commit] imports the
  * frame's DMA-BUF into KMS, attaches it to the primary plane with the frame's
  * in-fence as `IN_FENCE_FD` (the kernel waits on the submission, never us), and
- * suspends until the page flip event arrives on the [DRMEventLoop] reactor.
+ * suspends until *that* frame's page flip event arrives on the [DRMEventLoop]
+ * reactor. The render loop races ahead of the flips — several frames can be
+ * queued at once (bounded by the swapchain depth) — but the atomic commits
+ * themselves are serialized: the kernel allows only one page flip per CRTC at a
+ * time (a second concurrent commit returns EBUSY), so the next frame is
+ * submitted only when the previous flip's event arrives. The CPU records the
+ * next frame while the GPU renders the previous one and the kernel scans out
+ * the one before that.
  *
  * Buffer ownership: once [commit] has been called, this committer owns
  * [Frame.buffer] and returns it to the output's
  * [online.coffeeispower.crema.core.graphics.presentation.Swapchain] exactly once — at the flip that
- * replaces it, or immediately when [commit] fails *before* the kernel was asked
- * to scan it out (so one bad frame neither leaks a slot nor double-releases a
- * buffer). With a 2-deep pool one buffer is always being scanned out while the
- * other is cleared for the next frame.
+ * replaces it (captured as [FlipState.replaced] at commit time), or immediately
+ * when [commit] fails *before* the kernel was asked to scan it out (so one bad
+ * frame neither leaks a slot nor double-releases a buffer). The kernel
+ * serializes commits per CRTC, so page-flip events arrive in the same order the
+ * frames were committed and the in-flight queue pops from the front.
  *
- * Concurrency: the flip state (the awaiting continuation, the frame sequence
- * number and the buffer being scanned out) is carried *inside* the [inFlight]
- * atomic reference and published by the commit's compare-and-set, so the
- * reactor thread's page-flip handler never reads plain fields written by the
- * render thread — the [lastDisplayed] bookkeeping is touched only by the
- * reactor thread. See the commit's `compareAndSet` for the only hand-off.
+ * The submission is owned here too: it is closed once the kernel has waited on
+ * the in-fence (page-flip completion is the only point where the GPU is
+ * provably done with it), and after a failed commit only once [Submission.latch]
+ * reports completion, so a semaphore is never destroyed while the GPU is still
+ * executing it.
+ *
+ * Concurrency: the flip states (the awaiting continuation, the frame sequence
+ * number, the buffer being scanned out, the submission and the buffer each flip
+ * displaces) live in the [inFlight] deque guarded by [inFlightLock]. The render
+ * thread enqueues states in [commit] and presents only when its enqueue made
+ * the queue non-empty; the reactor thread pops the front in [onPageFlip] and
+ * presents the new head once the previous flip completed, so exactly one
+ * atomic commit is ever in flight (a present can only run when no flip is
+ * pending). [lastDisplayed] — read by commit to compute what the next flip
+ * displaces — is only touched under the same lock, so no state is published
+ * through separately-read plain fields on weakly-ordered hardware.
  */
 class DRMCommitter internal constructor(
     private val output: DRMOutput,
@@ -52,10 +73,12 @@ class DRMCommitter internal constructor(
 
     private val userData: MemorySegment = eventLoop.register(this)
 
-    /** The single flip currently in flight, if any. The value *is* the flip state. */
-    private val inFlight = AtomicReference<FlipState?>()
+    private val inFlightLock = Any()
 
-    /** The buffer the kernel was scanning out before the last completed flip. Reactor-thread-only. */
+    /** The flips currently in flight, in commit order (page-flip events arrive in the same order). */
+    private val inFlight = ArrayDeque<FlipState>()
+
+    /** The buffer the kernel is scanning out with no pending flip to replace it. Guarded by [inFlightLock]. */
     private var lastDisplayed: GPUScanoutImageBuffer? = null
 
     private var frameSeq = 0L
@@ -65,37 +88,77 @@ class DRMCommitter internal constructor(
     override suspend fun commit(frame: Frame): FrameResult {
         require(frame.buffer is DrmScanoutImageBuffer) { "DRM can only present DrmScanoutBuffer frames" }
         val seq = ++frameSeq
-        val state = FlipState(CompletableDeferred(), seq, frame.buffer)
-        if (!inFlight.compareAndSet(null, state)) {
-            // Invariant violation (the render loop is sequential, so this only
-            // fires if a flip is still pending after its commit was cancelled).
-            // The kernel never saw this buffer; return it to the pool instead
-            // of leaking a swapchain slot.
-            output.swapchain.release(frame.buffer)
-            error("A commit is already in flight on this output")
+        val state: FlipState
+        val isHead: Boolean
+        synchronized(inFlightLock) {
+            val replaced = inFlight.lastOrNull()?.buffer ?: lastDisplayed
+            state = FlipState(CompletableDeferred(), seq, frame.buffer, frame.submission, replaced)
+            inFlight.addLast(state)
+            // event presents the new head.
+            isHead = inFlight.size == 1
         }
-        try {
-            present(frame, seq)
-        } catch (e: Throwable) {
-            // present() failed before the atomic commit succeeded, so no flip
-            // event will arrive for this state: hand the buffer back to the
-            // swapchain (exactly once) and let the render loop retry.
-            inFlight.compareAndSet(state, null)
-            output.swapchain.release(frame.buffer)
-            throw e
-        }
+        if (isHead) presentHead(state)
         return state.deferred.await()
     }
 
-    private fun present(frame: Frame, seq: Long) {
-        val buffer = frame.buffer as DrmScanoutImageBuffer
+    /**
+     * Presents the head of the queue, converting any failure into a failed
+     * state instead of an exception escaping the commit's enqueue.
+     */
+    private suspend fun presentHead(state: FlipState) {
+        try {
+            present(state)
+        } catch (e: Throwable) {
+            failState(state, "presenting frame ${state.seq}", e)
+        }
+    }
+
+    /**
+     * Presents the frame queued behind the flip that just completed, submitting
+     * the next head after any failure (each failed head is popped by
+     * [failState], so this always makes progress). Runs on the reactor thread.
+     */
+    private fun presentNextQueued() {
+        while (true) {
+            val head: FlipState = synchronized(inFlightLock) { inFlight.firstOrNull() } ?: return
+            try {
+                present(head)
+                return
+            } catch (e: Throwable) {
+                runBlocking { failState(head, "presenting queued frame ${head.seq}", e) }
+            }
+        }
+    }
+
+    /**
+     * Handles a frame whose present() failed before the kernel was asked to
+     * scan it out: pops it from the queue, returns its buffer to the swapchain
+     * (exactly once), waits for the GPU to finish the submission before closing
+     * it (NonCancellable, so a cancelled commit still releases it instead of
+     * leaking it or closing the semaphore early), and wakes the suspended
+     * commit with the error. Runs on the render thread for the frame just
+     * enqueued, or on the reactor thread (via [runBlocking]) for a queued head.
+     */
+    private suspend fun failState(state: FlipState, reason: String, cause: Throwable) {
+        synchronized(inFlightLock) { inFlight.remove(state) }
+        output.swapchain.release(state.buffer)
+        withContext(NonCancellable) {
+            state.submission.latch.await()
+            state.submission.close()
+        }
+        logger.warn { "$reason failed: $cause" }
+        state.deferred.completeExceptionally(IllegalStateException("$reason failed", cause))
+    }
+
+    private fun present(state: FlipState) {
+        val buffer = state.buffer as DrmScanoutImageBuffer
         val dmaBufFd = buffer.exportDmaBufFd()
-        var fbId = 0
+        var fbId: Int
         try {
             val handle = importDmaBuf(dmaBufFd)
             fbId = addFramebuffer(buffer, handle)
             try {
-                commitFlip(fbId, frame)
+                commitFlip(fbId, state.submission)
             } catch (e: Throwable) {
                 Xf86Drm.drmModeRmFB(fd, fbId)
                 throw e
@@ -111,12 +174,23 @@ class DRMCommitter internal constructor(
         currentFbId = fbId
     }
 
-    /** Handles one completed page flip: resumes the commit and frees the buffer it replaced. */
+    /** Handles one completed page flip: submits the next queued frame and frees the buffer it replaced. */
     internal fun onPageFlip(sequence: Long, tvSec: Long, tvUsec: Long) {
-        val state = inFlight.getAndSet(null) ?: return
-        val freed = lastDisplayed
-        lastDisplayed = state.buffer
+        val state: FlipState
+        val freed: GPUScanoutImageBuffer?
+        synchronized(inFlightLock) {
+            state = inFlight.removeFirstOrNull() ?: return
+            freed = state.replaced
+            lastDisplayed = state.buffer
+        }
+        // The kernel waited on the frame's in-fence, so the GPU is done with the
+        // submission: releasing the semaphore now is safe.
+        state.submission.close()
         freed?.let { output.swapchain.release(it) }
+        // Submit the next queued frame before waking the render loop: the loop
+        // resumes from this deferred and may enqueue a fresh frame, which would
+        // otherwise race this thread's present for the same queue slot.
+        presentNextQueued()
         val presentedAt = tvSec * 1_000_000_000L + tvUsec * 1_000L
         state.deferred.complete(FrameResult(presented = true, presentedAt = presentedAt, frameSeq = state.seq))
     }
@@ -185,11 +259,11 @@ class DRMCommitter internal constructor(
         }
     }
 
-    private fun commitFlip(fbId: Int, frame: Frame) {
+    private fun commitFlip(fbId: Int, submission: Submission) {
         val request = Xf86Drm.drmModeAtomicAlloc()
         if (request.address() == 0L) error("drmModeAtomicAlloc failed")
         try {
-            val inFence = frame.submission.exportInFenceFd()
+            val inFence = submission.exportInFenceFd()
             try {
                 addProperty(request, planeId, props.planeCrtcId, crtcId.toLong())
                 addProperty(request, planeId, props.planeFbId, fbId.toLong())
@@ -228,15 +302,17 @@ class DRMCommitter internal constructor(
 
     /**
      * The complete state of one flip. Kept in a single immutable value so the
-     * publish (compare-and-set in [commit]) and the consumption
-     * (get-and-set in [onPageFlip]) exchange everything the reactor thread
-     * needs atomically — there is no separately-published mutable state that a
-     * stale read could get wrong on weakly-ordered hardware.
+     * publish (enqueue in [commit]) and the consumption (pop in [onPageFlip])
+     * exchange everything the reactor thread needs while holding [inFlightLock]
+     * — there is no separately-published mutable state that a stale read could
+     * get wrong on weakly-ordered hardware.
      */
     private class FlipState(
         val deferred: CompletableDeferred<FrameResult>,
         val seq: Long,
         val buffer: GPUScanoutImageBuffer,
+        val submission: Submission,
+        val replaced: GPUScanoutImageBuffer?,
     )
 
     override fun close() {

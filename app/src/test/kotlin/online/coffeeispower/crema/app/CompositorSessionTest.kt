@@ -36,6 +36,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.time.Duration.Companion.milliseconds
@@ -141,6 +142,37 @@ class CompositorSessionTest {
         assertTrue(!runThread.isAlive, "session.run did not return after the loop was closed")
         assertTrue(loop.closed, "event loop was not closed")
         assertTrue(output.closeCount.get() >= 1, "output was not released by the render loop")
+    }
+
+    @Test
+    fun renderLoopPipelinesCommitsWhileAnEarlierFlipIsPending() {
+        // The committer accepts several commits before any page flip completes,
+        // so the CPU must keep recording the next frame while the kernel is
+        // still scanning out the previous one. A single-slot committer would
+        // have rejected the second commit and killed the loop instead.
+        val committer = BlockingFakeCommitter()
+        val output = FakeOutput(committer)
+        val connector = FakeConnector(output)
+        val loop = FakeEventLoop(listOf(connector))
+        val backend = testBackend(loop, listOf(connector))
+
+        val session = CompositorSession(backend) {
+            val buffer = output.swapchain.acquireBuffer()
+            launch {
+                output.committer.commit(Frame(buffer, FakeSubmission()))
+            }
+        }
+        val runThread = Thread { session.run() }.apply { start() }
+
+        // The pool is 2-deep, so two frames can be in flight at once: two
+        // commits must start while the first flip is still pending.
+        awaitCondition({ committer.commitsStarted.get() >= 2 }) {
+            "render loop did not pipeline a second commit before the first page flip"
+        }
+
+        session.shutdown()
+        runThread.join(5_000)
+        assertTrue(!runThread.isAlive, "session.run did not return after shutdown")
     }
 
     private fun testBackend(loop: FakeEventLoop, connectors: List<Connector>): Backend =
